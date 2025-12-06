@@ -1,6 +1,4 @@
-[submodule "openfxc-hlsl"]
-	path = openfxc-hlsl
-	url = https://github.com/PippinwareLLC/openfxc-hlsl.git
 [submodule "openfxc-sem"]
 	path = openfxc-sem
 	url = https://github.com/PippinwareLLC/openfxc-sem.git
+	fetchRecurseSubmodules = true
