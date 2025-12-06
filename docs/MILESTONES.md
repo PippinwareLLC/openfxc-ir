@@ -1,7 +1,7 @@
 # Milestones - openfxc-ir (lower + optimize)
 
-- [ ] M0: CLI skeleton (lower)
-  - [ ] `openfxc-ir lower` verb, stdin/file input, JSON passthrough scaffold, exit codes.
+- [x] M0: CLI skeleton (lower)
+  - [x] `openfxc-ir lower` verb, stdin/file input, JSON passthrough scaffold, exit codes.
 
 - [ ] M1: IR model + schema (lower)
   - [ ] Define IR JSON (formatVersion 1): types, values, functions, blocks, instructions, resources.

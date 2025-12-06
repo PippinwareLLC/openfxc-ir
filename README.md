@@ -27,13 +27,14 @@ Target coverage by shader-model era/features (bootstrap status: planned unless n
 | SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0) | Planned via shared IR path; core arithmetic/flow/resources only (no backend/profile payloads). | Planned; same pass set remains profile-agnostic provided IR is well-typed. | No DXIL/DXBC containers emitted here. |
 | FX (technique/pass metadata) | Planned: carry entry/technique metadata alongside IR; backend choice deferred. | Passthrough: optimizations ignore FX metadata but preserve IR invariants. | Remains backend/profile agnostic. |
 
-## Quickstart (future)
-- Build: `dotnet build src/openfxc-ir/openfxc-ir.csproj` (to be created).
-- Lower: `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile vs_4_0 | openfxc-ir lower > foo.ir.json`
-- Optimize: `openfxc-ir lower < foo.sem.json | openfxc-ir optimize --passes constfold,dce,component-dce,copyprop,algebraic > foo.ir.opt.json`
+## Quickstart
+- Build: `dotnet build openfxc-ir.sln`
+- Lower (M0 skeleton): `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile vs_4_0 | openfxc-ir lower > foo.ir.json` (emits stub IR with a diagnostic until lowering is implemented)
+- Optimize: `openfxc-ir optimize` (pipeline scaffolding pending)
 
 ## Docs
-- Lower TDD: `temp/openfxc-ir-lower-TDD.md`
-- Optimize TDD: `temp/openfxc-ir-optimize.md`
-- Milestones: `temp/openfxc-ir-lower-MILESTONES.md` (includes optimize track)
-- TODO: `temp/openfxc-ir-lower-TODO.md`
+- Design: `docs/DESIGN.md`
+- Lower TDD: `docs/TDD.md`
+- Optimize TDD: `docs/TDD-Optimize.md`
+- Milestones: `docs/MILESTONES.md`
+- TODO: `docs/TODO.md`

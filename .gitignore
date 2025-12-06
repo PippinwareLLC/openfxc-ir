@@ -1,0 +1,6 @@
+src/openfxc-ir/obj/**
+src/openfxc-ir/bin/**
+src/OpenFXC.Ir.Core/bin/**
+src/OpenFXC.Ir.Core/obj/**
+tests/OpenFXC.Ir.Tests/bin/**
+tests/OpenFXC.Ir.Tests/obj/**
