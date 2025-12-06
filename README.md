@@ -27,9 +27,3 @@ Purpose: Lower the semantic model from `openfxc-sem` into a backend-agnostic IR 
 - Optimize TDD: `temp/openfxc-ir-optimize.md`
 - Milestones: `temp/openfxc-ir-lower-MILESTONES.md` (includes optimize track)
 - TODO: `temp/openfxc-ir-lower-TODO.md`
-
-## Next steps
-- Stand up CLI skeleton for `lower`.
-- Implement IR model and lowering per TDD invariants.
-- Wire the optimize pipeline and passes per TDD.
-- Add unit/snapshot/invariant tests and goldens for both lower and optimize.
