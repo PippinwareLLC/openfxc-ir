@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\\..\\src\\OpenFXC.Ir.Core\\OpenFXC.Ir.Core.csproj" />
+    <ProjectReference Include="..\\..\\openfxc-sem\\openfxc-hlsl\\src\\OpenFXC.Hlsl\\OpenFXC.Hlsl.csproj" />
+    <ProjectReference Include="..\\..\\openfxc-sem\\src\\OpenFXC.Sem.Core\\OpenFXC.Sem.Core.csproj" />
   </ItemGroup>
 
 </Project>

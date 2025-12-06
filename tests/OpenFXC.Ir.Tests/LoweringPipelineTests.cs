@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using OpenFXC.Hlsl;
 using OpenFXC.Ir;
 using OpenFXC.Sem;
 
@@ -10,22 +12,40 @@ public class LoweringPipelineTests
     public void Lower_UsesSemanticProfile_WhenNoOverrideProvided()
     {
         var pipeline = new LoweringPipeline();
-        var semanticJson = BuildSemanticJsonFromFixture();
+        var semanticJson = BuildSemanticJsonFromHlsl();
 
         var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
 
         Assert.Equal(1, result.FormatVersion);
-        Assert.Equal("ps_2_0", result.Profile);
+        Assert.Equal("vs_2_0", result.Profile);
         Assert.Equal("main", result.EntryPoint?.Function);
-        Assert.Equal("Unknown", result.EntryPoint?.Stage);
-        Assert.Contains(result.Diagnostics, d => d.Message.Contains("M0 skeleton", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Vertex", result.EntryPoint?.Stage);
+        Assert.Contains(result.Values, v => v.Kind == "Parameter" && v.Type == "float4");
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
+    }
+
+    [Fact]
+    public void Lower_EmitsResourcesAndReturnPlaceholder()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonFromHlsl();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        Assert.Contains(result.Resources, r => r.Name == "WorldViewProj" && r.Kind == "GlobalVariable");
+        Assert.Contains(result.Resources, r => r.Name == "DiffuseSampler" && r.Kind == "Sampler");
+        Assert.Contains(result.Values, v => v.Kind == "Undef" && v.Type == "float4");
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        var ret = Assert.Single(block.Instructions);
+        Assert.True(ret.Terminator);
     }
 
     [Fact]
     public void Lower_PrefersProfileOverride_WhenProvided()
     {
         var pipeline = new LoweringPipeline();
-        var semanticJson = BuildSemanticJsonFromFixture();
+        var semanticJson = BuildSemanticJsonFromHlsl();
 
         var result = pipeline.Lower(new LoweringRequest(semanticJson, "vs_4_0", null));
 
@@ -36,11 +56,12 @@ public class LoweringPipelineTests
     public void Lower_UsesEntryOverride_WhenProvided()
     {
         var pipeline = new LoweringPipeline();
-        var semanticJson = BuildSemanticJsonFromFixture();
+        var semanticJson = BuildSemanticJsonFromHlsl();
 
         var result = pipeline.Lower(new LoweringRequest(semanticJson, null, "customEntry"));
 
-        Assert.Equal("customEntry", result.EntryPoint?.Function);
+        Assert.Null(result.EntryPoint);
+        Assert.Contains(result.Diagnostics, d => d.Severity == "Error");
     }
 
     [Fact]
@@ -51,16 +72,38 @@ public class LoweringPipelineTests
         Assert.ThrowsAny<Exception>(() => pipeline.Lower(new LoweringRequest("{not json}", null, null)));
     }
 
-    private static string BuildSemanticJsonFromFixture()
+    private static string BuildSemanticJsonFromHlsl()
     {
-        var fixturePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "openfxc-sem", "tests", "fixtures", "sm1-smoke.ast.json"));
-        var astJson = File.ReadAllText(fixturePath);
-        var analyzer = new SemanticAnalyzer("ps_2_0", "main", astJson);
-        var semantic = analyzer.Analyze();
+        var hlsl = """
+        float4x4 WorldViewProj;
+        sampler2D DiffuseSampler;
+
+        float4 main(float4 pos : POSITION0) : POSITION
+        {
+            return mul(pos, WorldViewProj);
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("test.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         });
     }
 }
