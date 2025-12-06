@@ -10,11 +10,6 @@ public sealed class LoweringPipeline
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly IReadOnlyList<IrDiagnostic> SkeletonDiagnostics = new[]
-    {
-        IrDiagnostic.Info("IR lowering not implemented (M0 skeleton)")
-    };
-
     public IrModule Lower(LoweringRequest request)
     {
         if (request is null)
@@ -25,13 +20,23 @@ public sealed class LoweringPipeline
         var semantic = DeserializeSemantic(request.SemanticJson);
         var profile = ResolveProfile(request, semantic);
         var entry = ResolveEntry(request, semantic);
+        var stage = ResolveStage(semantic);
 
-        return new IrModule
+        var module = new IrModule
         {
             Profile = profile,
-            Entry = entry,
-            Diagnostics = SkeletonDiagnostics
+            EntryPoint = new IrEntryPoint
+            {
+                Function = entry,
+                Stage = stage
+            },
+            Diagnostics = new[]
+            {
+                IrDiagnostic.Info("IR lowering not implemented (M0 skeleton)")
+            }
         };
+
+        return module with { Diagnostics = module.Diagnostics.Concat(IrInvariants.Validate(module)).ToArray() };
     }
 
     private static SemanticOutput DeserializeSemantic(string semanticJson)
@@ -74,5 +79,16 @@ public sealed class LoweringPipeline
         }
 
         return "main";
+    }
+
+    private static string ResolveStage(SemanticOutput semantic)
+    {
+        var stage = semantic.EntryPoints.FirstOrDefault()?.Stage;
+        if (!string.IsNullOrWhiteSpace(stage))
+        {
+            return stage!;
+        }
+
+        return "Unknown";
     }
 }

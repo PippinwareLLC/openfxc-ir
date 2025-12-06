@@ -3,9 +3,9 @@
 - [x] M0: CLI skeleton (lower)
   - [x] `openfxc-ir lower` verb, stdin/file input, JSON passthrough scaffold, exit codes.
 
-- [ ] M1: IR model + schema (lower)
-  - [ ] Define IR JSON (formatVersion 1): types, values, functions, blocks, instructions, resources.
-  - [ ] Invariant helpers (SSA-ish, typed, block termination).
+- [x] M1: IR model + schema (lower)
+  - [x] Define IR JSON (formatVersion 1): types, values, functions, blocks, instructions, resources.
+  - [x] Invariant helpers (SSA-ish, typed, block termination).
 
 - [ ] M2: Core lowering
   - [ ] Functions/params/returns lowered.
