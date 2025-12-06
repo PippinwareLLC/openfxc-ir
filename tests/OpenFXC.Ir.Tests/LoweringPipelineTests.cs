@@ -34,11 +34,13 @@ public class LoweringPipelineTests
 
         Assert.Contains(result.Resources, r => r.Name == "WorldViewProj" && r.Kind == "GlobalVariable");
         Assert.Contains(result.Resources, r => r.Name == "DiffuseSampler" && r.Kind == "Sampler");
-        Assert.Contains(result.Values, v => v.Kind == "Undef" && v.Type == "float4");
+        Assert.DoesNotContain(result.Values, v => v.Kind == "Undef");
         var func = Assert.Single(result.Functions);
         var block = Assert.Single(func.Blocks);
         var ret = Assert.Single(block.Instructions);
         Assert.True(ret.Terminator);
+        Assert.Equal("Return", ret.Op);
+        Assert.Equal(func.Parameters.Single(), ret.Operands.Single());
     }
 
     [Fact]

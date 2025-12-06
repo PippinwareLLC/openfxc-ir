@@ -39,6 +39,10 @@ public sealed class LoweringPipeline
             var function = LowerFunction(entrySymbol, semantic, values);
             functions.Add(function);
         }
+        else if (entry is not null && entry.SymbolId is null)
+        {
+            diagnostics.Add(IrDiagnostic.Error("Entry point missing symbolId.", "lower"));
+        }
 
         var module = new IrModule
         {
@@ -113,6 +117,7 @@ public sealed class LoweringPipeline
     {
         var usedIds = new HashSet<int>();
         var parameters = new List<int>();
+        int? firstParameterId = null;
 
         foreach (var parameter in semantic.Symbols.Where(s =>
                      string.Equals(s.Kind, "Parameter", StringComparison.OrdinalIgnoreCase) &&
@@ -129,11 +134,13 @@ public sealed class LoweringPipeline
             };
             values.Add(value);
             parameters.Add(id);
+            firstParameterId ??= id;
         }
 
         var returnType = ParseReturnType(entrySymbol.Type);
         int? returnUndefId = null;
-        if (!IsVoid(returnType))
+        var returnOperand = firstParameterId;
+        if (!IsVoid(returnType) && returnOperand is null)
         {
             returnUndefId = AllocateId(null, usedIds);
             values.Add(new IrValue
@@ -143,12 +150,13 @@ public sealed class LoweringPipeline
                 Type = returnType,
                 Name = "undef_return"
             });
+            returnOperand = returnUndefId;
         }
 
         var returnInstruction = new IrInstruction
         {
             Op = "Return",
-            Operands = returnUndefId is null ? Array.Empty<int>() : new[] { returnUndefId.Value },
+            Operands = returnOperand is null ? Array.Empty<int>() : new[] { returnOperand.Value },
             Type = returnType,
             Terminator = true
         };
