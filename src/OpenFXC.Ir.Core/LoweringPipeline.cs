@@ -567,6 +567,14 @@ public sealed class LoweringPipeline
             {
                 return "Mul";
             }
+            if (calleeName is not null && calleeName.StartsWith("tex", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Sample";
+            }
+            if (string.Equals(calleeName, "sample", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Sample";
+            }
         }
 
         return "Call";
@@ -576,6 +584,7 @@ public sealed class LoweringPipeline
     {
         return op switch
         {
+            "=" => "Assign",
             "+" => "Add",
             "-" => "Sub",
             "*" => "Mul",

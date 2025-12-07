@@ -12,6 +12,9 @@ Purpose: Lower the semantic model from `openfxc-sem` into a backend-agnostic IR 
 - Output: optimized IR JSON, preserving invariants and backend agnosticism.
 - CLI goal: `openfxc-ir optimize --passes constfold,dce,component-dce,copyprop,algebraic < input.ir.json > output.ir.opt.json`.
 
+## Origin
+openfxc-ir is a distilled standalone CLI tool peeled from the larger (currently private) OpenFXC project.
+
 ## Key principles
 - Backend-agnostic: no DXBC opcodes/registers/containers.
 - SSA-ish, typed IR with explicit control flow and resource operations.

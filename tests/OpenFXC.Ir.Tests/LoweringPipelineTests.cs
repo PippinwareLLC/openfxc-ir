@@ -79,6 +79,23 @@ public class LoweringPipelineTests
         Assert.ThrowsAny<Exception>(() => pipeline.Lower(new LoweringRequest("{not json}", null, null)));
     }
 
+    [Fact]
+    public void Lower_MapsTex2D_ToSampleOp()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForTexture();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        Assert.Equal(2, block.Instructions.Count);
+        var sample = block.Instructions[0];
+        Assert.Equal("Sample", sample.Op);
+        Assert.Equal(2, sample.Operands.Count);
+        Assert.Equal("Return", block.Instructions[1].Op);
+    }
+
     private static string BuildSemanticJsonFromHlsl()
     {
         var hlsl = """
@@ -107,6 +124,40 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForTexture()
+    {
+        var hlsl = """
+        sampler2D S;
+
+        float4 main(float2 uv : TEXCOORD0) : SV_Target
+        {
+            return tex2D(S, uv);
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("tex.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("ps_2_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {
