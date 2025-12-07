@@ -242,16 +242,7 @@ public sealed class LoweringPipeline
 
         if (string.Equals(node.Kind, "Identifier", StringComparison.OrdinalIgnoreCase))
         {
-            SymbolInfo? symbol = null;
-            if (node.ReferencedSymbolId is int symId)
-            {
-                symbol = symbols.FirstOrDefault(s => s.Id == symId);
-            }
-            else
-            {
-                var type = typeByNode.TryGetValue(nodeId, out var t) ? t : null;
-                symbol = TryInferSymbolByType(type, symbols);
-            }
+            var symbol = ResolveSymbolFromNode(node, nodeId, typeByNode, symbols);
 
             if (symbol is not null)
             {
@@ -389,11 +380,48 @@ public sealed class LoweringPipeline
         {
             var leftChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "left", StringComparison.OrdinalIgnoreCase));
             var rightChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "right", StringComparison.OrdinalIgnoreCase));
-            var leftId = leftChild?.NodeId is int lId
-                ? LowerExpression(lId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+            var leftNodeId = leftChild?.NodeId;
+            var leftNode = leftNodeId is int lId && nodes.TryGetValue(lId, out var ln) ? ln : null;
+            var opNodeId = GetChildNodeId(node, "operator");
+            var opText = node.Operator;
+            if (string.IsNullOrWhiteSpace(opText) && opNodeId is int opId && nodes.TryGetValue(opId, out var opNode) && !string.IsNullOrWhiteSpace(opNode.Operator))
+            {
+                opText = opNode.Operator;
+            }
+
+            // Handle assignment to storeable targets.
+            if (string.Equals(opText, "=", StringComparison.OrdinalIgnoreCase) && leftNode is not null)
+            {
+                var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols);
+                if (targetSymbol is not null && ShouldStore(targetSymbol.Kind))
+                {
+                    var rhsId = rightChild?.NodeId is int rId
+                        ? LowerExpression(rId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                        : null;
+
+                    if (rhsId is null)
+                    {
+                        diagnostics.Add(IrDiagnostic.Error($"Failed to lower assignment RHS for {node.Id}.", "lower"));
+                        return null;
+                    }
+
+                    var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+                    instructions.Add(new IrInstruction
+                    {
+                        Op = "Store",
+                        Operands = baseVal is null ? new[] { rhsId.Value } : new[] { baseVal.Id, rhsId.Value },
+                        Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown"
+                    });
+
+                    return rhsId;
+                }
+            }
+
+            var leftId = leftNodeId is int lNodeId
+                ? LowerExpression(lNodeId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
                 : null;
-            var rightId = rightChild?.NodeId is int rId
-                ? LowerExpression(rId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+            var rightId = rightChild?.NodeId is int rId2
+                ? LowerExpression(rId2, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
                 : null;
 
             if (leftId is null || rightId is null)
@@ -413,7 +441,7 @@ public sealed class LoweringPipeline
 
             instructions.Add(new IrInstruction
             {
-                Op = ResolveBinaryOp(node.Operator),
+                Op = ResolveBinaryOp(opText),
                 Result = resultId,
                 Operands = new[] { leftId.Value, rightId.Value },
                 Type = resultType
@@ -646,6 +674,21 @@ public sealed class LoweringPipeline
         return null;
     }
 
+    private static SymbolInfo? ResolveSymbolFromNode(SyntaxNodeInfo node, int? nodeId, Dictionary<int, string> typeByNode, IReadOnlyList<SymbolInfo> symbols)
+    {
+        if (node.ReferencedSymbolId is int symId)
+        {
+            return symbols.FirstOrDefault(s => s.Id == symId);
+        }
+
+        if (nodeId is int id && typeByNode.TryGetValue(id, out var t))
+        {
+            return TryInferSymbolByType(t, symbols);
+        }
+
+        return TryInferSymbolByType(node.Operator ?? node.Swizzle, symbols);
+    }
+
     private static string ResolveBinaryOp(string? op)
     {
         return op switch
@@ -691,7 +734,16 @@ public sealed class LoweringPipeline
         if (symbolKind is null) return false;
         return symbolKind.Equals("GlobalVariable", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("CBuffer", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("CBufferMember", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("Buffer", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldStore(string? symbolKind)
+    {
+        if (symbolKind is null) return false;
+        return symbolKind.Equals("GlobalVariable", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("CBufferMember", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase);
     }
 

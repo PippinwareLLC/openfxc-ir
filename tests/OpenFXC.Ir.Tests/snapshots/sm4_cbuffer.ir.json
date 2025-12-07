@@ -17,12 +17,21 @@
           "id": "entry",
           "instructions": [
             {
-              "op": "Mul",
+              "op": "Load",
               "terminator": false,
               "result": 2,
               "operands": [
-                27,
                 1
+              ],
+              "type": "float4"
+            },
+            {
+              "op": "Mul",
+              "terminator": false,
+              "result": 4,
+              "operands": [
+                27,
+                2
               ],
               "type": "float4"
             },
@@ -30,7 +39,7 @@
               "op": "Return",
               "terminator": true,
               "operands": [
-                2
+                4
               ],
               "type": "float4"
             }
@@ -67,6 +76,11 @@
     },
     {
       "id": 2,
+      "type": "float4",
+      "kind": "Temp"
+    },
+    {
+      "id": 4,
       "type": "float4",
       "kind": "Temp"
     }

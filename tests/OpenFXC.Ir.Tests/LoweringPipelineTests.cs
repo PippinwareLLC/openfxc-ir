@@ -472,4 +472,5 @@ public class LoweringPipelineTests
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         });
     }
+
 }
