@@ -30,7 +30,7 @@ Use this list to track remaining functional gaps to reach parity with expected l
 - [x] Optimize snapshots: only `ps_texture` corpus; add SM3 branch/loop and SM4/5 cases.
 - [x] Lowering snapshots: `sm4_cbuffer` now included alongside other sample corpora with passing coverage.
 - [x] Negative tests: backend-leak detection, CFG invariants, and side-effect preservation are covered by regression cases.
- - [ ] Corpus coverage: no runs over `samples/` directory; tests rely on small snippets.
+- [x] Corpus coverage: sample smoke tests now lower/optimize DXSDK `Tutorial02`/`Tutorial04`/`Tutorial06` shaders from `samples/`.
 
 ## CLI/docs
 - [x] Optimize pass defaults include the `component-dce` placeholder; clarify behavior when a pass is unavailable.

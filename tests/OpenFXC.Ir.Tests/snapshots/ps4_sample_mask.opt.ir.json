@@ -28,18 +28,18 @@
             {
               "op": "Load",
               "terminator": false,
-              "result": 3,
+              "result": 4,
               "operands": [
-                2
+                3
               ],
               "type": "float"
             },
             {
               "op": "Swizzle",
               "terminator": false,
-              "result": 4,
+              "result": 5,
               "operands": [
-                3
+                4
               ],
               "type": "float3",
               "tag": "xxx"
@@ -47,10 +47,10 @@
             {
               "op": "Call",
               "terminator": false,
-              "result": 7,
+              "result": 8,
               "operands": [
-                4,
-                5
+                5,
+                7
               ],
               "type": "float4",
               "tag": "float4"
@@ -58,7 +58,7 @@
             {
               "op": "Load",
               "terminator": false,
-              "result": 8,
+              "result": 10,
               "operands": [
                 44
               ],
@@ -67,11 +67,11 @@
             {
               "op": "Lerp",
               "terminator": false,
-              "result": 10,
+              "result": 11,
               "operands": [
                 1,
-                7,
-                8
+                8,
+                10
               ],
               "type": "float4",
               "tag": "lerp"
@@ -80,7 +80,7 @@
               "op": "Return",
               "terminator": true,
               "operands": [
-                10
+                11
               ],
               "type": "float4"
             }
@@ -121,29 +121,29 @@
       "kind": "Temp"
     },
     {
-      "id": 2,
+      "id": 3,
       "type": "float",
       "kind": "CBufferMember",
       "name": "Gain"
     },
     {
-      "id": 3,
+      "id": 4,
       "type": "float",
       "kind": "Temp"
     },
     {
-      "id": 4,
+      "id": 5,
       "type": "float3",
       "kind": "Temp"
     },
     {
-      "id": 5,
+      "id": 7,
       "type": "float",
       "kind": "Constant",
       "name": "literal"
     },
     {
-      "id": 7,
+      "id": 8,
       "type": "float4",
       "kind": "Temp"
     },
@@ -154,12 +154,12 @@
       "name": "mask"
     },
     {
-      "id": 8,
+      "id": 10,
       "type": "float",
       "kind": "Temp"
     },
     {
-      "id": 10,
+      "id": 11,
       "type": "float4",
       "kind": "Temp"
     }

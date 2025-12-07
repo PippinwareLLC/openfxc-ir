@@ -33,12 +33,13 @@ public sealed class LoweringPipeline
         var resources = new List<IrResource>();
         var functions = new List<IrFunction>();
         var valueBySymbol = new Dictionary<int, IrValue>();
+        var usedIds = new HashSet<int>();
 
         if (entrySymbol is not null)
         {
-            LowerResources(semantic, resources, values, valueBySymbol);
-            LowerParameters(entrySymbol, semantic, values, valueBySymbol);
-            var function = LowerFunction(entrySymbol, semantic, values, valueBySymbol, diagnostics);
+            LowerResources(semantic, resources, values, valueBySymbol, usedIds);
+            LowerParameters(entrySymbol, semantic, values, valueBySymbol, usedIds);
+            var function = LowerFunction(entrySymbol, semantic, values, valueBySymbol, usedIds, diagnostics);
             functions.Add(function);
         }
         else if (entry is not null && entry.SymbolId is null)
@@ -147,25 +148,29 @@ public sealed class LoweringPipeline
         return semantic.Symbols.FirstOrDefault(s => s.Id == entry.SymbolId);
     }
 
-    private static void LowerParameters(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol)
+    private static void LowerParameters(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds)
     {
         foreach (var parameter in semantic.Symbols.Where(s =>
                      string.Equals(s.Kind, "Parameter", StringComparison.OrdinalIgnoreCase) &&
                      s.ParentSymbolId == entrySymbol.Id))
         {
-            EnsureValue(parameter, values, valueBySymbol, defaultKind: "Parameter");
+            EnsureValue(parameter, values, valueBySymbol, usedIds, defaultKind: "Parameter");
         }
     }
 
-    private static IrFunction LowerFunction(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, List<IrDiagnostic> diagnostics)
+    private static IrFunction LowerFunction(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrDiagnostic> diagnostics)
     {
-        var usedIds = new HashSet<int>(values.Select(v => v.Id));
         var parameters = values.Where(v => string.Equals(v.Kind, "Parameter", StringComparison.OrdinalIgnoreCase)).Select(v => v.Id).ToList();
         int? firstParameterId = parameters.FirstOrDefault();
 
         var typeByNode = semantic.Types
             .Where(t => t.NodeId is not null && !string.IsNullOrWhiteSpace(t.Type))
             .ToDictionary(t => t.NodeId!.Value, t => t.Type!);
+
+        foreach (var id in values.Select(v => v.Id))
+        {
+            usedIds.Add(id);
+        }
 
         var nodeById = BuildSyntaxLookup(semantic.Syntax);
         var functionNode = entrySymbol.DeclNodeId is int declId && nodeById.TryGetValue(declId, out var fnNode) ? fnNode : null;
@@ -210,7 +215,7 @@ public sealed class LoweringPipeline
         return id;
     }
 
-    private static void LowerResources(SemanticOutput semantic, List<IrResource> resources, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol)
+    private static void LowerResources(SemanticOutput semantic, List<IrResource> resources, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds)
     {
         foreach (var symbol in semantic.Symbols)
         {
@@ -227,7 +232,7 @@ public sealed class LoweringPipeline
                 Writable = IsWritableResource(symbol.Kind, symbol.Type)
             });
 
-            EnsureValue(symbol, values, valueBySymbol, defaultKind: symbol.Kind ?? "Resource");
+            EnsureValue(symbol, values, valueBySymbol, usedIds, defaultKind: symbol.Kind ?? "Resource");
         }
     }
 
@@ -299,7 +304,7 @@ public sealed class LoweringPipeline
                     return EmitLoad(symbol, nodeId, typeByNode, values, valueBySymbol, usedIds, instructions);
                 }
 
-                return EnsureValue(symbol, values, valueBySymbol)?.Id;
+                return EnsureValue(symbol, values, valueBySymbol, usedIds)?.Id;
             }
 
             diagnostics.Add(IrDiagnostic.Error($"Identifier node {node.Id} missing referenced symbol.", "lower"));
@@ -318,7 +323,7 @@ public sealed class LoweringPipeline
                         return EmitLoad(symbol, nodeId, typeByNode, values, valueBySymbol, usedIds, instructions, node.Swizzle);
                     }
 
-                    return EnsureValue(symbol, values, valueBySymbol)?.Id;
+                    return EnsureValue(symbol, values, valueBySymbol, usedIds)?.Id;
                 }
             }
 
@@ -449,7 +454,7 @@ public sealed class LoweringPipeline
                             : null;
                         if (baseSymbol is not null)
                         {
-                            var ensured = EnsureValue(baseSymbol, values, valueBySymbol, defaultKind: baseSymbol.Kind ?? "Resource");
+                            var ensured = EnsureValue(baseSymbol, values, valueBySymbol, usedIds, defaultKind: baseSymbol.Kind ?? "Resource");
                             baseOperandId = ensured?.Id;
                         }
                         else if (baseChildId is int bExprId)
@@ -477,7 +482,7 @@ public sealed class LoweringPipeline
                     }
                     else
                     {
-                        var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+                        var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, usedIds, defaultKind: targetSymbol.Kind ?? "Resource");
                         if (baseVal is null)
                         {
                             diagnostics.Add(IrDiagnostic.Error($"Failed to resolve store target for node {node.Id}.", "lower"));
@@ -510,7 +515,12 @@ public sealed class LoweringPipeline
                 return null;
             }
 
+            var opName = ResolveBinaryOp(opText);
             var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
+            if (IsComparisonOp(opName) || IsLogicalOp(opName))
+            {
+                resultType = "bool";
+            }
             var resultId = AllocateId(null, usedIds);
             values.Add(new IrValue
             {
@@ -521,7 +531,7 @@ public sealed class LoweringPipeline
 
             instructions.Add(new IrInstruction
             {
-                Op = ResolveBinaryOp(opText),
+                Op = opName,
                 Result = resultId,
                 Operands = new[] { leftId.Value, rightId.Value },
                 Type = resultType
@@ -682,7 +692,7 @@ public sealed class LoweringPipeline
                 return null;
             }
 
-            var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+            var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, usedIds, defaultKind: targetSymbol.Kind ?? "Resource");
             if (baseVal is null)
             {
                 diagnostics.Add(IrDiagnostic.Error($"Failed to resolve store target for node {node.Id}.", "lower"));
@@ -703,16 +713,32 @@ public sealed class LoweringPipeline
         return null;
     }
 
-    private static IrValue? EnsureValue(SymbolInfo symbol, List<IrValue>? values, Dictionary<int, IrValue> valueBySymbol, string? defaultKind = null)
+    private static IrValue? EnsureValue(SymbolInfo symbol, List<IrValue>? values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, string? defaultKind = null)
     {
         if (symbol.Id is not int id)
         {
             return null;
         }
 
-        if (valueBySymbol.TryGetValue(id, out var existing))
+        var hasExisting = valueBySymbol.TryGetValue(id, out var existing);
+        if (hasExisting)
         {
-            return existing;
+            var typesCompatible = string.IsNullOrWhiteSpace(symbol.Type)
+                                  || string.IsNullOrWhiteSpace(existing?.Type)
+                                  || string.Equals(symbol.Type, existing.Type, StringComparison.OrdinalIgnoreCase);
+            if (typesCompatible)
+            {
+                return existing;
+            }
+        }
+
+        if (!usedIds.Add(id))
+        {
+            id = AllocateId(null, usedIds);
+        }
+        else if (values is not null && values.Any(v => v.Id == id))
+        {
+            id = AllocateId(null, usedIds);
         }
 
         var value = new IrValue
@@ -725,6 +751,10 @@ public sealed class LoweringPipeline
         };
 
         valueBySymbol[id] = value;
+        if (symbol.Id is int originalId && id != originalId)
+        {
+            valueBySymbol[originalId] = value;
+        }
         values?.Add(value);
         return value;
     }
@@ -880,6 +910,16 @@ public sealed class LoweringPipeline
         };
     }
 
+    private static bool IsComparisonOp(string? op)
+    {
+        return op is "Eq" or "Ne" or "Lt" or "Le" or "Gt" or "Ge";
+    }
+
+    private static bool IsLogicalOp(string? op)
+    {
+        return op is "LogicalAnd" or "LogicalOr";
+    }
+
     private static string? ResolveUnaryOp(string? op)
     {
         return op switch
@@ -947,7 +987,7 @@ public sealed class LoweringPipeline
 
     private static int EmitLoad(SymbolInfo symbol, int nodeId, Dictionary<int, string> typeByNode, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, string? tag = null)
     {
-        var baseVal = EnsureValue(symbol, values, valueBySymbol, defaultKind: symbol.Kind ?? "Resource");
+        var baseVal = EnsureValue(symbol, values, valueBySymbol, usedIds, defaultKind: symbol.Kind ?? "Resource");
         var resultId = AllocateId(null, usedIds);
         var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : symbol.Type ?? "unknown";
         values.Add(new IrValue
@@ -991,6 +1031,33 @@ public sealed class LoweringPipeline
         {
             currentLabel = label;
             currentInstructions = new List<IrInstruction>();
+        }
+
+        int? NormalizeCondition(int? valueId, int? nodeId)
+        {
+            if (valueId is null)
+            {
+                return null;
+            }
+
+            var condType = nodeId is int cid && typeByNode.TryGetValue(cid, out var ct) ? ct : null;
+            if (string.Equals(condType, "bool", StringComparison.OrdinalIgnoreCase))
+            {
+                return valueId;
+            }
+
+            var castId = AllocateId(null, usedIds);
+            values.Add(new IrValue { Id = castId, Kind = "Temp", Type = "bool" });
+            currentInstructions.Add(new IrInstruction
+            {
+                Op = "Cast",
+                Result = castId,
+                Operands = new[] { valueId.Value },
+                Type = "bool",
+                Tag = "bool"
+            });
+
+            return castId;
         }
 
         var bodyNodeId = GetChildNodeId(functionNode ?? new SyntaxNodeInfo { Children = Array.Empty<SyntaxNodeChild>() }, "body");
@@ -1042,6 +1109,7 @@ public sealed class LoweringPipeline
                 var condValue = condId is int cId
                     ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
                     : null;
+                var condOperand = NormalizeCondition(condValue, condId);
 
                 var thenLabel = NewLabel("then");
                 var elseLabel = elseId is not null ? NewLabel("else") : null;
@@ -1050,7 +1118,7 @@ public sealed class LoweringPipeline
                 currentInstructions.Add(new IrInstruction
                 {
                     Op = "BranchCond",
-                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Operands = condOperand is null ? Array.Empty<int>() : new[] { condOperand.Value },
                     Terminator = true,
                     Tag = elseLabel is null ? $"then:{thenLabel}" : $"then:{thenLabel};else:{elseLabel}"
                 });
@@ -1099,10 +1167,11 @@ public sealed class LoweringPipeline
                 var condValue = condId is int cId
                     ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
                     : null;
+                var condOperand = NormalizeCondition(condValue, condId);
                 currentInstructions.Add(new IrInstruction
                 {
                     Op = "BranchCond",
-                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Operands = condOperand is null ? Array.Empty<int>() : new[] { condOperand.Value },
                     Terminator = true,
                     Tag = $"then:{bodyLabel};else:{exitLabel}"
                 });
@@ -1150,10 +1219,11 @@ public sealed class LoweringPipeline
                 var condValue = condId is int cId
                     ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
                     : null;
+                var condOperand = NormalizeCondition(condValue, condId);
                 currentInstructions.Add(new IrInstruction
                 {
                     Op = "BranchCond",
-                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Operands = condOperand is null ? Array.Empty<int>() : new[] { condOperand.Value },
                     Terminator = true,
                     Tag = $"then:{bodyLabel};else:{exitLabel}"
                 });
@@ -1184,10 +1254,11 @@ public sealed class LoweringPipeline
                 var condValue = condId is int cId
                     ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
                     : null;
+                var condOperand = NormalizeCondition(condValue, condId);
                 currentInstructions.Add(new IrInstruction
                 {
                     Op = "BranchCond",
-                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Operands = condOperand is null ? Array.Empty<int>() : new[] { condOperand.Value },
                     Terminator = true,
                     Tag = $"then:{bodyLabel};else:{exitLabel}"
                 });

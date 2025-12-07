@@ -19,9 +19,9 @@
             {
               "op": "Load",
               "terminator": false,
-              "result": 2,
+              "result": 4,
               "operands": [
-                1
+                2
               ],
               "type": "float4"
             },
@@ -30,7 +30,7 @@
               "terminator": false,
               "operands": [
                 27,
-                2
+                4
               ],
               "type": "float4",
               "tag": "direct"
@@ -39,7 +39,7 @@
               "op": "Return",
               "terminator": true,
               "operands": [
-                2
+                4
               ],
               "type": "float4"
             }
@@ -63,13 +63,13 @@
       "semantic": "SV_POSITION0"
     },
     {
-      "id": 1,
+      "id": 2,
       "type": "float4",
       "kind": "CBufferMember",
       "name": "Color"
     },
     {
-      "id": 2,
+      "id": 4,
       "type": "float4",
       "kind": "Temp"
     },
