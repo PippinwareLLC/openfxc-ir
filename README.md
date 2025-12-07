@@ -13,6 +13,9 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 - CLI: `openfxc-ir optimize [--passes constfold,dce,component-dce,copyprop,algebraic] [--profile <name>] [--input <path>] < input.ir.json > output.ir.opt.json`.
 - Defaults: when `--passes` is omitted, all available passes (constfold, algebraic, copyprop, dce, component-dce) run in that order; unknown passes now surface errors that list available options.
 
+## Origin
+openfxc-ir is a distilled standalone CLI tool peeled from the larger (currently private) OpenFXC project.
+
 ## Key principles
 - Backend-agnostic: no DXBC/DXIL/SPIR-V opcodes, registers, or containers.
 - SSA-ish, typed IR with explicit control flow and resource operations.
