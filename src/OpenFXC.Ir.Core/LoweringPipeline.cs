@@ -630,16 +630,17 @@ public sealed class LoweringPipeline
     {
         if (string.IsNullOrWhiteSpace(type)) return null;
 
-        var candidates = symbols.Where(s =>
-            string.Equals(s.Type, type, StringComparison.OrdinalIgnoreCase) &&
-            (string.Equals(s.Kind, "CBufferMember", StringComparison.OrdinalIgnoreCase)
-             || string.Equals(s.Kind, "StructMember", StringComparison.OrdinalIgnoreCase)
-             || string.Equals(s.Kind, "GlobalVariable", StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-
-        if (candidates.Count == 1)
+        string[] preferredKinds = { "CBufferMember", "StructMember", "GlobalVariable" };
+        foreach (var kind in preferredKinds)
         {
-            return candidates[0];
+            var candidates = symbols.Where(s =>
+                string.Equals(s.Type, type, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(s.Kind, kind, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (candidates.Count == 1)
+            {
+                return candidates[0];
+            }
         }
 
         return null;

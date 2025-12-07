@@ -23,7 +23,7 @@ public class LoweringSnapshotTests
     {
         new object[] { "ps_texture", "ps_2_0", "main", SemSnapshotPath("ps_texture.hlsl"), SnapshotPath("ps_texture.ir.json"), true },
         new object[] { "ps_sm3_texproj", "ps_3_0", "main", SemSnapshotPath("ps_sm3_texproj.hlsl"), SnapshotPath("ps_sm3_texproj.ir.json"), true },
-        new object[] { "sm4_cbuffer", "vs_4_0", "main", SemSnapshotPath("sm4_cbuffer.hlsl"), SnapshotPath("sm4_cbuffer.ir.json"), false },
+        new object[] { "sm4_cbuffer", "vs_4_0", "main", SemSnapshotPath("sm4_cbuffer.hlsl"), SnapshotPath("sm4_cbuffer.ir.json"), true },
         new object[] { "sm5_structured", "cs_5_0", "main", SemSnapshotPath("sm5_structured.hlsl"), SnapshotPath("sm5_structured.ir.json"), true },
         new object[] { "fx_basic", "vs_2_0", "main", SemSnapshotPath("fx_basic.hlsl"), SnapshotPath("fx_basic.ir.json"), true }
     };

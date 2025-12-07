@@ -17,10 +17,20 @@
           "id": "entry",
           "instructions": [
             {
+              "op": "Mul",
+              "terminator": false,
+              "result": 2,
+              "operands": [
+                27,
+                1
+              ],
+              "type": "float4"
+            },
+            {
               "op": "Return",
               "terminator": true,
               "operands": [
-                1
+                2
               ],
               "type": "float4"
             }
@@ -52,8 +62,13 @@
     {
       "id": 1,
       "type": "float4",
-      "kind": "Undef",
-      "name": "undef_return"
+      "kind": "CBufferMember",
+      "name": "Color"
+    },
+    {
+      "id": 2,
+      "type": "float4",
+      "kind": "Temp"
     }
   ],
   "resources": [
@@ -63,16 +78,5 @@
       "type": "unknown"
     }
   ],
-  "diagnostics": [
-    {
-      "message": "Identifier node 29 missing referenced symbol.",
-      "severity": "Error",
-      "stage": "lower"
-    },
-    {
-      "message": "Failed to lower binary expression 30.",
-      "severity": "Error",
-      "stage": "lower"
-    }
-  ]
+  "diagnostics": []
 }
