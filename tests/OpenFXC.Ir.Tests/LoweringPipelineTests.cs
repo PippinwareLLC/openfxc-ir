@@ -100,11 +100,25 @@ public class LoweringPipelineTests
     public void Lower_UnsupportedIntrinsic_EmitsDiagnostic()
     {
         var pipeline = new LoweringPipeline();
-        var semanticJson = BuildSemanticJsonForIntrinsic();
+        var semanticJson = BuildSemanticJsonForUnsupportedIntrinsic();
 
         var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
 
         Assert.Contains(result.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("Intrinsic", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Lower_NormalizeIntrinsic_IsRecognized()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForNormalize();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        Assert.Contains(block.Instructions, i => i.Op == "Normalize");
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
     }
 
     [Fact]
@@ -206,12 +220,12 @@ public class LoweringPipelineTests
         });
     }
 
-    private static string BuildSemanticJsonForIntrinsic()
+    private static string BuildSemanticJsonForUnsupportedIntrinsic()
     {
         var hlsl = """
         float4 main(float4 pos : POSITION0) : POSITION
         {
-            return normalize(pos);
+            return foo_intrinsic(pos);
         }
         """;
 
@@ -231,6 +245,22 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
+        if (semantic.Syntax?.Nodes is { } nodes)
+        {
+            var callNode = nodes.FirstOrDefault(n => string.Equals(n.Kind, "CallExpression", StringComparison.OrdinalIgnoreCase));
+            if (callNode is not null)
+            {
+                var updatedNodes = nodes.Select(n =>
+                    n.Id == callNode.Id
+                        ? n with { CalleeKind = "Intrinsic", CalleeName = "foo_intrinsic" }
+                        : n).ToArray();
+
+                semantic = semantic with
+                {
+                    Syntax = semantic.Syntax with { Nodes = updatedNodes }
+                };
+            }
+        }
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {
@@ -309,6 +339,38 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("ps_3_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForNormalize()
+    {
+        var hlsl = """
+        float4 main(float4 pos : POSITION0) : POSITION
+        {
+            return normalize(pos);
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("normalize.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {

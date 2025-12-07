@@ -505,18 +505,28 @@ public sealed class LoweringPipeline
     {
         if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(calleeName, "mul", StringComparison.OrdinalIgnoreCase))
+            return calleeName?.ToLowerInvariant() switch
             {
-                return "Mul";
-            }
-            if (calleeName is not null && calleeName.StartsWith("tex", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Sample";
-            }
-            if (string.Equals(calleeName, "sample", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Sample";
-            }
+                "mul" => "Mul",
+                "dot" => "Dot",
+                "normalize" => "Normalize",
+                "saturate" => "Saturate",
+                "sin" => "Sin",
+                "cos" => "Cos",
+                "abs" => "Abs",
+                "min" => "Min",
+                "max" => "Max",
+                "clamp" => "Clamp",
+                "lerp" => "Lerp",
+                "ddx" => "Ddx",
+                "ddy" => "Ddy",
+                "length" => "Length",
+                "rsqrt" => "Rsqrt",
+                "rcp" => "Rcp",
+                var name when name is not null && name.StartsWith("tex") => "Sample",
+                "sample" => "Sample",
+                _ => "Call"
+            };
         }
 
         return "Call";
