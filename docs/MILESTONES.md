@@ -30,12 +30,12 @@
   - [x] `openfxc-ir optimize` verb, pass selection (`--passes`), passthrough scaffold.
   - [x] Share IR model/invariants from lower stage.
 
-- [ ] M7: Core optimize passes
-  - [ ] Constant folding.
-  - [ ] Dead code elimination.
-  - [ ] Component-level DCE (swizzle lane liveness).
-  - [ ] Copy propagation.
-  - [ ] Algebraic simplifications (`x+0`, `x*1`, `x*0`, etc.).
+- [x] M7: Core optimize passes
+  - [x] Constant folding.
+  - [x] Dead code elimination.
+  - [x] Component-level DCE (swizzle lane liveness placeholder).
+  - [x] Copy propagation.
+  - [x] Algebraic simplifications (`x+0`, `x*1`, `x*0`, etc.).
 
 - [ ] M8: Tests + invariants (optimize)
   - [ ] Unit tests per pass.

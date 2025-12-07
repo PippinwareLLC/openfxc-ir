@@ -21,10 +21,7 @@ public sealed class OptimizePipeline
 
         var diagnostics = new List<IrDiagnostic>(module.Diagnostics ?? Array.Empty<IrDiagnostic>());
         var passes = ParsePasses(request.Passes);
-        foreach (var pass in passes)
-        {
-            diagnostics.Add(IrDiagnostic.Info($"Pass '{pass}' not implemented; skipping.", "optimize"));
-        }
+        module = RunPassPipeline(module, passes, diagnostics);
 
         var validated = IrInvariants.Validate(module);
 
@@ -49,9 +46,35 @@ public sealed class OptimizePipeline
     {
         if (string.IsNullOrWhiteSpace(passes))
         {
-            return Array.Empty<string>();
+            return new[] { "constfold", "algebraic", "copyprop", "dce", "component-dce" };
         }
 
-        return passes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return passes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(p => p.ToLowerInvariant())
+            .ToArray();
+    }
+
+    private static IrModule RunPassPipeline(IrModule module, IReadOnlyList<string> passes, List<IrDiagnostic> diagnostics)
+    {
+        foreach (var pass in passes)
+        {
+            module = pass switch
+            {
+                "constfold" => OptimizePasses.ConstantFold(module, diagnostics),
+                "algebraic" => OptimizePasses.AlgebraicSimplify(module, diagnostics),
+                "copyprop" => OptimizePasses.CopyPropagate(module, diagnostics),
+                "dce" => OptimizePasses.DeadCodeEliminate(module, diagnostics),
+                "component-dce" => OptimizePasses.ComponentDce(module, diagnostics),
+                _ => WithUnknownPassDiag(module, diagnostics, pass)
+            };
+        }
+
+        return module;
+    }
+
+    private static IrModule WithUnknownPassDiag(IrModule module, List<IrDiagnostic> diagnostics, string pass)
+    {
+        diagnostics.Add(IrDiagnostic.Info($"Pass '{pass}' not recognized; skipping.", "optimize"));
+        return module;
     }
 }

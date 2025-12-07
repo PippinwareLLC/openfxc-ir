@@ -29,7 +29,7 @@ Non-goals: profile-dependent rewrites, backend-specific lowering, aggressive FP 
 openfxc-ir optimize [options] < input.ir.json > output.ir.opt.json
 ```
 Options:
-- `--passes constfold,dce,component-dce,copyprop,algebraic` (parsed and reported; currently not executed)
+- `--passes constfold,dce,component-dce,copyprop,algebraic`
 - `--profile <name>` (optional passthrough/heuristics)
 
 Exit codes: `0` success (diagnostics allowed), `1` internal error (I/O/JSON/etc).
@@ -87,8 +87,8 @@ Add an invariant test suite to enforce these post-passes.
 - Invariant tests: run optimize then `AssertValidIr()` (defs/refs/terminators/types/backend-agnostic scan).
 
 ## 7. Definition of Done
-- CLI reads IR JSON, writes optimized IR JSON; `--passes` selects pipeline (currently noted as unimplemented until passes land).
-- Passes implemented/tested: `constfold`, `dce`, `component-dce`, `copyprop`, `algebraic` (future).
+- CLI reads IR JSON, writes optimized IR JSON; `--passes` selects pipeline.
+- Passes implemented/tested: `constfold`, `dce`, `component-dce` (placeholder), `copyprop`, `algebraic`.
 - IR invariants preserved; no backend/profile leakage.
 - End-to-end pipeline on a sample corpus succeeds without internal errors; expected instruction count reductions; behaviorally equivalent modulo allowed simplifications.
 

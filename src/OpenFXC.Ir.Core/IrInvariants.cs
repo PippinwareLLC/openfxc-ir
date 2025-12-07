@@ -43,6 +43,12 @@ public static class IrInvariants
                 diagnostics.Add(IrDiagnostic.Error($"Function {function.Name} missing returnType."));
             }
 
+            if (function.Blocks is null || function.Blocks.Count == 0)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Function {function.Name} has no blocks.", "invariant"));
+                continue;
+            }
+
             foreach (var parameter in function.Parameters)
             {
                 if (!knownValues.Contains(parameter))
