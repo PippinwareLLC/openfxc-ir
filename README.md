@@ -1,16 +1,17 @@
 # openfxc-ir
 
-Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVersion 1), then (future) optimize that IR before profile/legalization/backends (DX9/DXBC, DXIL, SPIR-V).
+Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVersion 1), then optimize that IR before profile/legalization/backends (DX9/DXBC, DXIL, SPIR-V).
 
 ## Scope (lower)
-- Input: semantic JSON (formatVersion 3) from `openfxc-sem analyze` (SM1–SM5, FX).
+- Input: semantic JSON (formatVersion 3) from `openfxc-sem analyze` (SM1-SM5, FX).
 - Output: IR JSON with functions/blocks/instructions/values/resources, no DX9/DXBC specifics.
 - CLI: `openfxc-ir lower [--profile <name>] [--entry <name>] [--input <path>] < input.sem.json > output.ir.json`.
 
 ## Scope (optimize)
 - Input: IR JSON from `openfxc-ir lower`.
-- Output: optimized IR JSON (pipeline runs constfold, algebraic, copyprop, DCE; component-DCE placeholder).
-- CLI: `openfxc-ir optimize --passes constfold,dce,component-dce,copyprop,algebraic < input.ir.json > output.ir.opt.json`.
+- Output: optimized IR JSON (pipeline runs constfold, algebraic, copyprop, DCE; `component-dce` currently a placeholder).
+- CLI: `openfxc-ir optimize [--passes constfold,dce,component-dce,copyprop,algebraic] [--profile <name>] [--input <path>] < input.ir.json > output.ir.opt.json`.
+- Defaults: when `--passes` is omitted, all available passes (constfold, algebraic, copyprop, dce, component-dce placeholder) run in that order.
 
 ## Key principles
 - Backend-agnostic: no DXBC/DXIL/SPIR-V opcodes, registers, or containers.
@@ -20,10 +21,10 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 ## Compatibility matrix (current)
 | Profile band | Lower | Optimize | Notes |
 | --- | --- | --- | --- |
-| SM1.x (vs_1_1/ps_1_1) | Planned | Planned | Depends on `openfxc-sem` surface; expect diagnostics for unsupported legacy intrinsics. |
-| SM2.x–SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`). | Not yet | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
-| SM4.x–SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Experimental**: arithmetic/control flow lower; resource loads emit diagnostics for unsupported cases (cbuffer fields, structured buffers). | Not yet | Snapshots capture current diagnostics (`sm4_cbuffer`, `sm5_structured`). |
-| FX (techniques/passes) | **Minimal**: entry lowering works when present; technique metadata not yet projected into IR. | Not yet | Snapshot `fx_basic` covers entry path. |
+| SM1.x (vs_1_1/ps_1_1) | Planned | Planned | Depends on `openfxc-sem`; expect diagnostics for unsupported legacy intrinsics. |
+| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`). | **Alpha**: generic constfold/algebraic/copyprop/DCE; `component-dce` placeholder. | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
+| SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Experimental**: arithmetic/control flow lower; resource loads emit diagnostics for unsupported cases (cbuffer fields, structured buffers). | **Experimental**: optimize passes run on math/flow only; resource gaps remain. | Snapshots capture current diagnostics (`sm4_cbuffer`, `sm5_structured`). |
+| FX (techniques/passes) | **Minimal**: entry lowering works when present; technique metadata not yet projected into IR. | **Passthrough**: optimize ignores FX metadata; runs generic passes on IR. | Snapshot `fx_basic` covers entry path. |
 
 ## IR schema (formatVersion 1)
 - `profile`, `entryPoint` (function/stage), `functions` (name/returnType/parameters/blocks), `blocks` (id/instructions with `op`/`operands`/`result`/`terminator`/`type`/`tag`), `values` (id/kind/type/name/semantic), `resources` (name/kind/type), `diagnostics` (severity/message/stage).
@@ -33,8 +34,9 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 - Build: `dotnet build openfxc-ir.sln`
 - Lower (library): `var module = new LoweringPipeline().Lower(new LoweringRequest(semanticJson, profileOverride, entryOverride));`
 - Lower (CLI): `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile vs_2_0 | openfxc-ir lower --entry main > foo.ir.json`
-- Optimize (CLI): `openfxc-ir optimize --passes constfold,dce --input foo.ir.json > foo.ir.opt.json`
-- Tests: `dotnet test` (includes snapshot goldens under `tests/OpenFXC.Ir.Tests/snapshots`).
+- Optimize (CLI): `openfxc-ir optimize --input foo.ir.json > foo.ir.opt.json`
+- End-to-end example: `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile ps_2_0 | openfxc-ir lower --entry main | openfxc-ir optimize > foo.ir.opt.json`
+- Tests: `dotnet test` (includes lowering and optimize snapshots under `tests/OpenFXC.Ir.Tests/snapshots`).
 
 ## Docs
 - Design: `docs/DESIGN.md`

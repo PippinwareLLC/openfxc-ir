@@ -42,6 +42,6 @@
   - [x] Snapshot tests for combined pipeline (lower -> optimize).
   - [x] Invariant tests post-optimize (SSA-ish, typed, CFG intact, no dangling refs).
 
-- [ ] M9: Docs + polish (optimize)
-  - [ ] Update README/TDD/CLI usage for optimize.
-  - [ ] Note pass defaults and examples; include pipeline examples end-to-end.
+- [x] M9: Docs + polish (optimize)
+  - [x] Update README/TDD/CLI usage for optimize.
+  - [x] Note pass defaults and examples; include pipeline examples end-to-end.

@@ -29,7 +29,7 @@ Non-goals: profile-dependent rewrites, backend-specific lowering, aggressive FP 
 openfxc-ir optimize [options] < input.ir.json > output.ir.opt.json
 ```
 Options:
-- `--passes constfold,dce,component-dce,copyprop,algebraic`
+- `--passes constfold,dce,component-dce,copyprop,algebraic` (default: all in this order)
 - `--profile <name>` (optional passthrough/heuristics)
 
 Exit codes: `0` success (diagnostics allowed), `1` internal error (I/O/JSON/etc).
