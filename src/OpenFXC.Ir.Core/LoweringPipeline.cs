@@ -378,8 +378,8 @@ public sealed class LoweringPipeline
 
         if (string.Equals(node.Kind, "BinaryExpression", StringComparison.OrdinalIgnoreCase))
         {
-            var leftChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "left", StringComparison.OrdinalIgnoreCase));
-            var rightChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "right", StringComparison.OrdinalIgnoreCase));
+            var leftChild = GetChildByRoles(node, "left", "target", "lhs");
+            var rightChild = GetChildByRoles(node, "right", "rhs", "value");
             var leftNodeId = leftChild?.NodeId;
             var leftNode = leftNodeId is int lId && nodes.TryGetValue(lId, out var ln) ? ln : null;
             var opNodeId = GetChildNodeId(node, "operator");
@@ -390,7 +390,7 @@ public sealed class LoweringPipeline
             }
 
             // Handle assignment to storeable targets.
-            if (string.Equals(opText, "=", StringComparison.OrdinalIgnoreCase) && leftNode is not null)
+            if (leftNode is not null)
             {
                 var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols);
                 if (targetSymbol is not null && ShouldStore(targetSymbol.Kind))
@@ -687,6 +687,17 @@ public sealed class LoweringPipeline
         }
 
         return TryInferSymbolByType(node.Operator ?? node.Swizzle, symbols);
+    }
+
+    private static SyntaxNodeChild? GetChildByRoles(SyntaxNodeInfo node, params string[] roles)
+    {
+        foreach (var role in roles)
+        {
+            var child = node.Children.FirstOrDefault(c => string.Equals(c.Role, role, StringComparison.OrdinalIgnoreCase));
+            if (child is not null) return child;
+        }
+
+        return null;
     }
 
     private static string ResolveBinaryOp(string? op)
