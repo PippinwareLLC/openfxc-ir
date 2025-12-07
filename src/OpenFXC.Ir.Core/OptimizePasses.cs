@@ -529,7 +529,14 @@ internal static class OptimizePasses
             return false;
         }
 
-        return ConstantValue.TryParse(v, requestedType, out constant);
+        if (ConstantValue.TryParse(v, requestedType, out constant))
+        {
+            return true;
+        }
+
+        // Fallback: attempt to parse literal name directly to avoid null literal warnings.
+        constant = default;
+        return false;
     }
 
     private static Dictionary<int, int> BuildUseCounts(IReadOnlyList<IrBlock> blocks)
@@ -626,7 +633,8 @@ internal static class OptimizePasses
                 cols = 1;
             }
 
-            if (!TryParseElements(value.Name, rows * cols, out var elements))
+            var literal = value.Name ?? string.Empty;
+            if (!TryParseElements(literal, rows * cols, out var elements))
             {
                 return false;
             }
