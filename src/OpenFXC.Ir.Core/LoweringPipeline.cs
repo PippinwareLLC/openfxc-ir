@@ -405,13 +405,51 @@ public sealed class LoweringPipeline
                         return null;
                     }
 
-                    var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
-                    instructions.Add(new IrInstruction
+                    if (string.Equals(leftNode.Kind, "IndexExpression", StringComparison.OrdinalIgnoreCase))
                     {
-                        Op = "Store",
-                        Operands = baseVal is null ? new[] { rhsId.Value } : new[] { baseVal.Id, rhsId.Value },
-                        Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown"
-                    });
+                        var baseChildId = GetChildNodeId(leftNode, "expression");
+                        var indexChildId = GetChildNodeId(leftNode, "index");
+                        int? baseOperandId = null;
+                        var baseSymbol = baseChildId is int bId && nodes.TryGetValue(bId, out var bNode)
+                            ? ResolveSymbolFromNode(bNode, bId, typeByNode, symbols)
+                            : null;
+                        if (baseSymbol is not null)
+                        {
+                            var ensured = EnsureValue(baseSymbol, values, valueBySymbol, defaultKind: baseSymbol.Kind ?? "Resource");
+                            baseOperandId = ensured?.Id;
+                        }
+                        else if (baseChildId is int bExprId)
+                        {
+                            baseOperandId = LowerExpression(bExprId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+                        }
+
+                        var idxVal = indexChildId is int iId
+                            ? LowerExpression(iId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                            : null;
+
+                        if (baseOperandId is null || idxVal is null)
+                        {
+                            diagnostics.Add(IrDiagnostic.Error($"Failed to lower indexed store at node {node.Id}.", "lower"));
+                            return null;
+                        }
+
+                        instructions.Add(new IrInstruction
+                        {
+                            Op = "Store",
+                            Operands = new[] { baseOperandId.Value, idxVal.Value, rhsId.Value },
+                            Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown"
+                        });
+                    }
+                    else
+                    {
+                        var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+                        instructions.Add(new IrInstruction
+                        {
+                            Op = "Store",
+                            Operands = baseVal is null ? new[] { rhsId.Value } : new[] { baseVal.Id, rhsId.Value },
+                            Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown"
+                        });
+                    }
 
                     return rhsId;
                 }
@@ -794,7 +832,9 @@ public sealed class LoweringPipeline
         if (symbolKind is null) return false;
         return symbolKind.Equals("GlobalVariable", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("CBufferMember", StringComparison.OrdinalIgnoreCase)
-               || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase);
+               || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.StartsWith("RW", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("Buffer", StringComparison.OrdinalIgnoreCase);
     }
 
     private static int EmitLoad(SymbolInfo symbol, int nodeId, Dictionary<int, string> typeByNode, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, string? tag = null)

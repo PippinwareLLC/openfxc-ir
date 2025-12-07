@@ -5,13 +5,13 @@ Use this list to track remaining functional gaps to reach parity with expected l
 ## Lowering gaps
 - [x] Cbuffer field loads: `sm4_cbuffer` now lowers without diagnostics after binding/field resolution.
 - [ ] Structured buffers/UAVs: read indexing now lowers (`Index` op); no support for writes or RW* resources; no multidimensional/index swizzle support.
-- [ ] Stores/output writes: assignments to resources/globals/UAVs are unsupported; add store semantics or explicit diagnostics where writes appear.
+- [ ] Stores/output writes: initial `Store` op emitted for assignable globals/cbuffer/struct members; still no support for UAV/structured writes or validation, needs full semantics and tests.
 - [ ] Intrinsic coverage: expanded (basic math/`tex*` plus normalize/dot/pow/exp/log/step/smoothstep/reflect/refract/atan2/fma/etc.), but still missing broader HLSL set (e.g., transpose, determinant, noise, pack/unpack, etc.).
 - [ ] Control-flow value merges: no phi/merge handling; branches reuse plain value IDs and can be incorrect across paths.
 - [ ] SM1.x coverage: unimplemented; compatibility matrix remains “planned.”
 
 ## Optimize gaps
-- [ ] Component-DCE: placeholder/no-op; implement per-lane liveness trimming.
+- [ ] Component-DCE: placeholder/no-op; implement per-lane liveness trimming (tests expect placeholder only).
 - [ ] Pass precision: passes are not SSA/CFG aware (no phi handling, no side-effect model beyond a small pure-op list); copyprop/DCE can be unsound in complex control flow.
 - [ ] Constfold/algebraic limits: only scalar numeric strings; no vector/matrix folding or mask-aware simplifications; no folding of `Index`/resource ops.
 - [ ] Side-effect modeling: no explicit modeling for resource/sample/store effects; DCE/passes should honor side-effectful ops.
