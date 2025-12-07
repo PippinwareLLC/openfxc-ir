@@ -1,0 +1,78 @@
+{
+  "formatVersion": 1,
+  "profile": "vs_4_0",
+  "entryPoint": {
+    "function": "main",
+    "stage": "Vertex"
+  },
+  "functions": [
+    {
+      "name": "main",
+      "returnType": "float4",
+      "parameters": [
+        16
+      ],
+      "blocks": [
+        {
+          "id": "entry",
+          "instructions": [
+            {
+              "op": "Return",
+              "terminator": true,
+              "operands": [
+                1
+              ],
+              "type": "float4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": 3,
+      "type": "unknown",
+      "kind": "CBuffer",
+      "name": "PerFrame"
+    },
+    {
+      "id": 16,
+      "type": "VSIn",
+      "kind": "Parameter",
+      "name": "input",
+      "semantic": "SV_POSITION0"
+    },
+    {
+      "id": 27,
+      "type": "float4",
+      "kind": "LocalVariable",
+      "name": "p"
+    },
+    {
+      "id": 1,
+      "type": "float4",
+      "kind": "Undef",
+      "name": "undef_return"
+    }
+  ],
+  "resources": [
+    {
+      "name": "PerFrame",
+      "kind": "CBuffer",
+      "type": "unknown"
+    }
+  ],
+  "diagnostics": [
+    {
+      "message": "Identifier node 29 missing referenced symbol.",
+      "severity": "Error",
+      "stage": "lower"
+    },
+    {
+      "message": "Failed to lower binary expression 30.",
+      "severity": "Error",
+      "stage": "lower"
+    }
+  ]
+}

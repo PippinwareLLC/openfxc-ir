@@ -31,6 +31,8 @@ public static class IrInvariants
 
         foreach (var function in module.Functions)
         {
+            var definedResults = new HashSet<int>();
+
             if (string.IsNullOrWhiteSpace(function.Name))
             {
                 diagnostics.Add(IrDiagnostic.Error("Function missing name."));
@@ -75,6 +77,10 @@ public static class IrInvariants
                     {
                         diagnostics.Add(IrDiagnostic.Error($"Instruction result references unknown value id {res}."));
                     }
+                    else if (instr.Result is { } defined && !definedResults.Add(defined))
+                    {
+                        diagnostics.Add(IrDiagnostic.Error($"Value id {defined} defined multiple times in function {function.Name}."));
+                    }
 
                     foreach (var operand in instr.Operands)
                     {
@@ -84,11 +90,25 @@ public static class IrInvariants
                         }
                     }
 
+                    if (HasBackendSpecificTokens(instr.Op) || HasBackendSpecificTokens(instr.Tag))
+                    {
+                        diagnostics.Add(IrDiagnostic.Error($"Instruction '{instr.Op}' carries backend-specific artifacts; IR must remain backend-agnostic."));
+                    }
+
                     terminated = instr.Terminator;
                 }
             }
         }
 
         return diagnostics;
+    }
+
+    private static bool HasBackendSpecificTokens(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        return text.Contains("dxbc", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("dxil", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("spirv", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("d3d", StringComparison.OrdinalIgnoreCase);
     }
 }

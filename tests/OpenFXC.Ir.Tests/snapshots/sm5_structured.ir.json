@@ -1,0 +1,67 @@
+{
+  "formatVersion": 1,
+  "profile": "cs_5_0",
+  "entryPoint": {
+    "function": "main",
+    "stage": "Compute"
+  },
+  "functions": [
+    {
+      "name": "main",
+      "returnType": "float4",
+      "parameters": [
+        26
+      ],
+      "blocks": [
+        {
+          "id": "entry",
+          "instructions": [
+            {
+              "op": "Return",
+              "terminator": true,
+              "operands": [
+                1
+              ],
+              "type": "float4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": 3,
+      "type": "unknown",
+      "kind": "CBuffer",
+      "name": "PerFrame"
+    },
+    {
+      "id": 26,
+      "type": "uint",
+      "kind": "Parameter",
+      "name": "idx",
+      "semantic": "SV_DISPATCHTHREADID0"
+    },
+    {
+      "id": 1,
+      "type": "float4",
+      "kind": "Undef",
+      "name": "undef_return"
+    }
+  ],
+  "resources": [
+    {
+      "name": "PerFrame",
+      "kind": "CBuffer",
+      "type": "unknown"
+    }
+  ],
+  "diagnostics": [
+    {
+      "message": "Unsupported expression kind \u0027IndexExpression\u0027.",
+      "severity": "Error",
+      "stage": "lower"
+    }
+  ]
+}

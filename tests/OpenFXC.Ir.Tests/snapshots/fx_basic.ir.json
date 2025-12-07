@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "profile": "vs_2_0",
+  "entryPoint": {
+    "function": "main",
+    "stage": "Vertex"
+  },
+  "functions": [
+    {
+      "name": "main",
+      "returnType": "float4",
+      "parameters": [
+        7
+      ],
+      "blocks": [
+        {
+          "id": "entry",
+          "instructions": [
+            {
+              "op": "Return",
+              "terminator": true,
+              "operands": [
+                7
+              ],
+              "type": "float4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": 7,
+      "type": "float4",
+      "kind": "Parameter",
+      "name": "p",
+      "semantic": "POSITION0"
+    }
+  ],
+  "resources": [],
+  "diagnostics": []
+}

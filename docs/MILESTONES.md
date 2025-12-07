@@ -17,10 +17,10 @@
   - [x] Unsupported intrinsic/entry/type mismatch diagnostics.
   - [x] Tolerate semantic diagnostics; partial IR with errors recorded.
 
-- [ ] M4: Tests + snapshots (lower)
-  - [ ] Unit tests for ops/CFG/resources.
-  - [ ] Snapshot tests over small HLSL corpus (SM2/3/4/5, FX entry).
-  - [ ] Invariant tests over IR JSON (SSA-ish, typed, no DX9 artifacts).
+- [x] M4: Tests + snapshots (lower)
+  - [x] Unit tests for ops/CFG/resources.
+  - [x] Snapshot tests over small HLSL corpus (SM2/3/4/5, FX entry).
+  - [x] Invariant tests over IR JSON (SSA-ish, typed, no DX9 artifacts).
 
 - [ ] M5: Docs + polish (lower)
   - [ ] README/TDD alignment, schema notes, usage examples.

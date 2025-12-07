@@ -132,4 +132,80 @@ public class IrInvariantsTests
 
         Assert.Contains(diagnostics, d => d.Message.Contains("unknown value id 2", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Validate_FlagsBackendSpecificArtifacts()
+    {
+        var module = new IrModule
+        {
+            Values = new[]
+            {
+                new IrValue { Id = 1, Kind = "Temp", Type = "float4" }
+            },
+            Functions = new[]
+            {
+                new IrFunction
+                {
+                    Name = "main",
+                    ReturnType = "float4",
+                    Blocks = new[]
+                    {
+                        new IrBlock
+                        {
+                            Id = "entry",
+                            Instructions = new[]
+                            {
+                                new IrInstruction
+                                {
+                                    Op = "DxilSample",
+                                    Result = 1,
+                                    Terminator = true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        var diagnostics = IrInvariants.Validate(module);
+
+        Assert.Contains(diagnostics, d => d.Message.Contains("backend", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsMultipleDefinitions()
+    {
+        var module = new IrModule
+        {
+            Values = new[]
+            {
+                new IrValue { Id = 1, Kind = "Temp", Type = "float4" }
+            },
+            Functions = new[]
+            {
+                new IrFunction
+                {
+                    Name = "main",
+                    ReturnType = "float4",
+                    Blocks = new[]
+                    {
+                        new IrBlock
+                        {
+                            Id = "entry",
+                            Instructions = new[]
+                            {
+                                new IrInstruction { Op = "Add", Result = 1, Terminator = false },
+                                new IrInstruction { Op = "Mul", Result = 1, Terminator = true }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        var diagnostics = IrInvariants.Validate(module);
+
+        Assert.Contains(diagnostics, d => d.Message.Contains("defined multiple times", StringComparison.OrdinalIgnoreCase));
+    }
 }

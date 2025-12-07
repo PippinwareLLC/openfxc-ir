@@ -107,6 +107,36 @@ public class LoweringPipelineTests
         Assert.Contains(result.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("Intrinsic", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Lower_LoadsCbufferField()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForCbuffer();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        Assert.True(block.Instructions.Count >= 1);
+        Assert.Equal("Return", block.Instructions.Last().Op);
+        Assert.Contains(result.Diagnostics, d => d.Severity == "Error");
+    }
+
+    [Fact]
+    public void Lower_LowersIfAndWhile_ToCfgBlocks()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForControlFlow();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        Assert.True(func.Blocks.Count >= 4);
+        Assert.Contains(func.Blocks, b => b.Id.Contains("while", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(func.Blocks, b => b.Id.Contains("if", StringComparison.OrdinalIgnoreCase) || b.Instructions.Any(i => i.Op == "BranchCond" && (i.Tag?.Contains("then:") ?? false)));
+        Assert.True(func.Blocks.Any(b => b.Instructions.Any(i => i.Op == "BranchCond")), "Expected at least one conditional branch.");
+    }
+
     private static string BuildSemanticJsonFromHlsl()
     {
         var hlsl = """
@@ -201,6 +231,84 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForCbuffer()
+    {
+        var hlsl = """
+        cbuffer C : register(b0)
+        {
+            float4 v;
+        };
+
+        float4 main() : SV_Position
+        {
+            return v;
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("cbuffer.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("vs_4_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForControlFlow()
+    {
+        var hlsl = """
+        float4 main(float x : TEXCOORD0) : SV_Target
+        {
+            float y = x;
+            while (y > 0)
+            {
+                y = y - 1;
+            }
+
+            if (y > 0.5)
+                return float4(1, 0, 0, 1);
+            else
+                return float4(0, 1, 0, 1);
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("controlflow.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("ps_3_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {
