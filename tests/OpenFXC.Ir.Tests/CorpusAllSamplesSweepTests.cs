@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
 using OpenFXC.Hlsl;
 using OpenFXC.Ir;
 using OpenFXC.Sem;
@@ -17,39 +18,48 @@ public class CorpusAllSamplesSweepTests
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    [Fact]
-    public void Sweep_All_Samples_When_Enabled()
+    public static IEnumerable<object[]> CorpusFiles
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_SAMPLE_CORPUS"), "1", StringComparison.Ordinal))
+        get
         {
-            return; // skip unless explicitly requested; this sweep is slow/noisy.
-        }
-
-        var repoRoot = GetRepoRoot();
-        var sampleRoot = Path.Combine(repoRoot, "samples");
-        var files = Directory.EnumerateFiles(sampleRoot, "*.*", SearchOption.AllDirectories)
-            .Where(f => f.EndsWith(".fx", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".hlsl", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        var failures = new List<string>();
-
-        foreach (var file in files)
-        {
-            try
+            if (!Enabled)
             {
-                SweepFile(file);
+                return new[] { new object[] { "SKIP" } };
             }
-            catch (Exception ex)
-            {
-                failures.Add($"{file}: {ex.Message}");
-            }
-        }
 
-        Assert.True(failures.Count == 0, $"Corpus sweep found issues in {failures.Count} file(s): {string.Join(" | ", failures)}");
+            var files = EnumerateSampleFiles().ToList();
+            if (files.Count == 0)
+            {
+                return new[] { new object[] { "SKIP_NO_FILES" } };
+            }
+
+            return files.Select(f => new object[] { f });
+        }
     }
 
-    private static void SweepFile(string file)
+    [Theory]
+    [MemberData(nameof(CorpusFiles))]
+    public void Sweep_Sample_File(string file)
     {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        if (string.Equals(file, "SKIP", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(file, "SKIP_NO_FILES", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var failures = SweepFile(file);
+        Assert.True(failures.Count == 0, $"{file} failed: {string.Join(" | ", failures)}");
+    }
+
+    private static List<string> SweepFile(string file)
+    {
+        var fileStopwatch = Stopwatch.StartNew();
+        var failures = new List<string>();
         var hlsl = File.ReadAllText(file);
         var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
         var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
@@ -73,25 +83,40 @@ public class CorpusAllSamplesSweepTests
 
         foreach (var candidate in candidates)
         {
-            var semantic = new SemanticAnalyzer(candidate.Profile, candidate.Entry, astJson).Analyze();
-            var semanticJson = JsonSerializer.Serialize(semantic, SerializerOptions);
-
-            var lowered = new LoweringPipeline().Lower(new LoweringRequest(semanticJson, candidate.Profile, candidate.Entry));
-            // Keep going even if diagnostics exist; only invariant errors or thrown exceptions will surface.
-            var lowerInvariantErrors = IrInvariants.Validate(lowered).Where(d => string.Equals(d.Severity, "Error", StringComparison.OrdinalIgnoreCase)).ToList();
-            if (lowerInvariantErrors.Count > 0)
+            try
             {
-                throw new InvalidOperationException($"{file} [{candidate.Profile}:{candidate.Entry}] lowering invariants: {string.Join("; ", lowerInvariantErrors.Select(e => e.Message))}");
+                var semantic = new SemanticAnalyzer(candidate.Profile, candidate.Entry, astJson).Analyze();
+                var semanticJson = JsonSerializer.Serialize(semantic, SerializerOptions);
+
+                var entryStopwatch = Stopwatch.StartNew();
+                var lowered = new LoweringPipeline().Lower(new LoweringRequest(semanticJson, candidate.Profile, candidate.Entry));
+                // Keep going even if diagnostics exist; only invariant errors or thrown exceptions will surface.
+                var lowerInvariantErrors = IrInvariants.Validate(lowered).Where(d => string.Equals(d.Severity, "Error", StringComparison.OrdinalIgnoreCase)).ToList();
+                if (lowerInvariantErrors.Count > 0)
+                {
+                    failures.Add($"{file} [{candidate.Profile}:{candidate.Entry}] lowering invariants: {string.Join("; ", lowerInvariantErrors.Select(e => e.Message))}");
+                    continue;
+                }
+
+                var loweredJson = JsonSerializer.Serialize(lowered, SerializerOptions);
+                var optimized = new OptimizePipeline().Optimize(new OptimizeRequest(loweredJson, "constfold,algebraic,dce,component-dce,copyprop", candidate.Profile));
+                var optInvariantErrors = IrInvariants.Validate(optimized).Where(d => string.Equals(d.Severity, "Error", StringComparison.OrdinalIgnoreCase)).ToList();
+                if (optInvariantErrors.Count > 0)
+                {
+                    failures.Add($"{file} [{candidate.Profile}:{candidate.Entry}] optimized invariants: {string.Join("; ", optInvariantErrors.Select(e => e.Message))}");
+                    continue;
+                }
+
+                Console.WriteLine($"[CORPUS] {Path.GetFileName(file)} [{candidate.Profile}:{candidate.Entry}] {entryStopwatch.ElapsedMilliseconds} ms");
             }
-
-            var loweredJson = JsonSerializer.Serialize(lowered, SerializerOptions);
-            var optimized = new OptimizePipeline().Optimize(new OptimizeRequest(loweredJson, "constfold,algebraic,dce,component-dce,copyprop", candidate.Profile));
-            var optInvariantErrors = IrInvariants.Validate(optimized).Where(d => string.Equals(d.Severity, "Error", StringComparison.OrdinalIgnoreCase)).ToList();
-            if (optInvariantErrors.Count > 0)
+            catch (Exception ex)
             {
-                throw new InvalidOperationException($"{file} [{candidate.Profile}:{candidate.Entry}] optimized invariants: {string.Join("; ", optInvariantErrors.Select(e => e.Message))}");
+                failures.Add($"{file} [{candidate.Profile}:{candidate.Entry}] error: {ex.Message}");
             }
         }
+
+        Console.WriteLine($"[CORPUS] {file} total {fileStopwatch.ElapsedMilliseconds} ms");
+        return failures;
     }
 
     private static List<EntryCandidate> GatherEntries(SemanticOutput semantic)
@@ -133,6 +158,16 @@ public class CorpusAllSamplesSweepTests
             _ => "ps_4_0"
         };
     }
+
+    private static IEnumerable<string> EnumerateSampleFiles()
+    {
+        var repoRoot = GetRepoRoot();
+        var sampleRoot = Path.Combine(repoRoot, "samples");
+        return Directory.EnumerateFiles(sampleRoot, "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".fx", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".hlsl", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool Enabled => string.Equals(Environment.GetEnvironmentVariable("RUN_SAMPLE_CORPUS"), "1", StringComparison.Ordinal);
 
     private static string GetRepoRoot() => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
