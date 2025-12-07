@@ -138,61 +138,14 @@ public sealed class LoweringPipeline
         var nodeById = BuildSyntaxLookup(semantic.Syntax);
         var functionNode = entrySymbol.DeclNodeId is int declId && nodeById.TryGetValue(declId, out var fnNode) ? fnNode : null;
 
-        var instructions = new List<IrInstruction>();
-        int? returnValueId = null;
-        string returnType = ParseReturnType(entrySymbol.Type);
-
-        if (functionNode is not null)
-        {
-            var returnExprId = FindReturnExpression(nodeById, functionNode.Id ?? -1);
-            if (returnExprId is not null)
-            {
-                returnValueId = LowerExpression(returnExprId.Value, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
-                if (returnValueId is null && !IsVoid(returnType))
-                {
-                    diagnostics.Add(IrDiagnostic.Error("Failed to lower return expression.", "lower"));
-                }
-            }
-        }
-
-        int? returnUndefId = null;
-        var returnOperand = returnValueId ?? firstParameterId;
-        if (!IsVoid(returnType) && returnOperand is null)
-        {
-            returnUndefId = AllocateId(null, usedIds);
-            var undef = new IrValue
-            {
-                Id = returnUndefId.Value,
-                Kind = "Undef",
-                Type = returnType,
-                Name = "undef_return"
-            };
-            values.Add(undef);
-            returnOperand = returnUndefId;
-        }
-
-        var returnInstruction = new IrInstruction
-        {
-            Op = "Return",
-            Operands = returnOperand is null ? Array.Empty<int>() : new[] { returnOperand.Value },
-            Type = returnType,
-            Terminator = true
-        };
-
-        instructions.Add(returnInstruction);
-
-        var block = new IrBlock
-        {
-            Id = "entry",
-            Instructions = instructions
-        };
+        var blocks = LowerFunctionBody(functionNode, entrySymbol, semantic, values, valueBySymbol, typeByNode, usedIds, firstParameterId, diagnostics);
 
         return new IrFunction
         {
             Name = entrySymbol.Name ?? "main",
-            ReturnType = returnType,
+            ReturnType = ParseReturnType(entrySymbol.Type),
             Parameters = parameters,
-            Blocks = new[] { block }
+            Blocks = blocks
         };
     }
 
@@ -277,31 +230,6 @@ public sealed class LoweringPipeline
             }
         }
         return map;
-    }
-
-    private static int? FindReturnExpression(Dictionary<int, SyntaxNodeInfo> nodes, int rootId)
-    {
-        if (!nodes.TryGetValue(rootId, out var node)) return null;
-        if (string.Equals(node.Kind, "ReturnStatement", StringComparison.OrdinalIgnoreCase))
-        {
-            var exprChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "expression", StringComparison.OrdinalIgnoreCase));
-            if (exprChild.NodeId is int exprId)
-            {
-                return exprId;
-            }
-            return null;
-        }
-
-        foreach (var child in node.Children)
-        {
-            if (child.NodeId is int childId)
-            {
-                var found = FindReturnExpression(nodes, childId);
-                if (found is not null) return found;
-            }
-        }
-
-        return null;
     }
 
     private static int? LowerExpression(int nodeId, Dictionary<int, SyntaxNodeInfo> nodes, Dictionary<int, string> typeByNode, IReadOnlyList<SymbolInfo> symbols, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, List<IrDiagnostic> diagnostics)
@@ -618,5 +546,238 @@ public sealed class LoweringPipeline
     {
         var child = node.Children.FirstOrDefault(c => string.Equals(c.Role, role, StringComparison.OrdinalIgnoreCase));
         return child.NodeId;
+    }
+
+    private static IrBlock[] LowerFunctionBody(SyntaxNodeInfo? functionNode, SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, Dictionary<int, string> typeByNode, HashSet<int> usedIds, int? firstParameterId, List<IrDiagnostic> diagnostics)
+    {
+        var nodeById = BuildSyntaxLookup(semantic.Syntax);
+        var blocks = new List<IrBlock>();
+        var currentInstructions = new List<IrInstruction>();
+        var currentLabel = "entry";
+        var blockCounter = 0;
+        string NewLabel(string prefix) => $"{prefix}{++blockCounter}";
+
+        void FinishBlock()
+        {
+            blocks.Add(new IrBlock
+            {
+                Id = currentLabel,
+                Instructions = currentInstructions.ToArray()
+            });
+        }
+
+        void StartBlock(string label)
+        {
+            currentLabel = label;
+            currentInstructions = new List<IrInstruction>();
+        }
+
+        var bodyNodeId = GetChildNodeId(functionNode ?? new SyntaxNodeInfo { Children = Array.Empty<SyntaxNodeChild>() }, "body");
+        var bodyNode = bodyNodeId is int bId && nodeById.TryGetValue(bId, out var bn) ? bn : null;
+        var statements = bodyNode?.Children.Where(c => string.Equals(c.Role, "statement", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<SyntaxNodeChild>();
+
+        foreach (var stmt in statements)
+        {
+            if (stmt.NodeId is not int stmtId || !nodeById.TryGetValue(stmtId, out var stmtNode))
+            {
+                continue;
+            }
+
+            if (string.Equals(stmtNode.Kind, "ReturnStatement", StringComparison.OrdinalIgnoreCase))
+            {
+                var exprId = GetChildNodeId(stmtNode, "expression");
+                int? valueId = null;
+                if (exprId is int eId)
+                {
+                    valueId = LowerExpression(eId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics);
+                }
+
+                var returnType = ParseReturnType(entrySymbol.Type);
+                if (!IsVoid(returnType) && valueId is null)
+                {
+                    var undefId = AllocateId(null, usedIds);
+                    values.Add(new IrValue { Id = undefId, Kind = "Undef", Type = returnType, Name = "undef_return" });
+                    valueId = undefId;
+                }
+
+                currentInstructions.Add(new IrInstruction
+                {
+                    Op = "Return",
+                    Operands = valueId is null ? Array.Empty<int>() : new[] { valueId.Value },
+                    Type = ParseReturnType(entrySymbol.Type),
+                    Terminator = true
+                });
+
+                FinishBlock();
+                return blocks.ToArray();
+            }
+
+            if (string.Equals(stmtNode.Kind, "IfStatement", StringComparison.OrdinalIgnoreCase))
+            {
+                var condId = GetChildNodeId(stmtNode, "condition");
+                var thenId = GetChildNodeId(stmtNode, "then");
+                var elseId = GetChildNodeId(stmtNode, "else");
+
+                var condValue = condId is int cId
+                    ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
+                    : null;
+
+                var thenLabel = NewLabel("then");
+                var elseLabel = elseId is not null ? NewLabel("else") : null;
+                var mergeLabel = NewLabel("merge");
+
+                currentInstructions.Add(new IrInstruction
+                {
+                    Op = "BranchCond",
+                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Terminator = true,
+                    Tag = elseLabel is null ? $"then:{thenLabel}" : $"then:{thenLabel};else:{elseLabel}"
+                });
+                FinishBlock();
+
+                StartBlock(thenLabel);
+                if (thenId is int tId)
+                {
+                    LowerEmbeddedStatement(tId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                }
+                if (!currentInstructions.Any(i => i.Terminator))
+                {
+                    currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = mergeLabel });
+                }
+                FinishBlock();
+
+                if (elseLabel is not null)
+                {
+                    StartBlock(elseLabel);
+                    if (elseId is int eStmtId)
+                    {
+                        LowerEmbeddedStatement(eStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                    }
+                    if (!currentInstructions.Any(i => i.Terminator))
+                    {
+                        currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = mergeLabel });
+                    }
+                    FinishBlock();
+                }
+
+                StartBlock(mergeLabel);
+                continue;
+            }
+
+            if (string.Equals(stmtNode.Kind, "WhileStatement", StringComparison.OrdinalIgnoreCase))
+            {
+                var condLabel = NewLabel("while.cond");
+                var bodyLabel = NewLabel("while.body");
+                var exitLabel = NewLabel("while.exit");
+
+                currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = condLabel });
+                FinishBlock();
+
+                StartBlock(condLabel);
+                var condId = GetChildNodeId(stmtNode, "condition");
+                var condValue = condId is int cId
+                    ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
+                    : null;
+                currentInstructions.Add(new IrInstruction
+                {
+                    Op = "BranchCond",
+                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Terminator = true,
+                    Tag = $"then:{bodyLabel};else:{exitLabel}"
+                });
+                FinishBlock();
+
+                StartBlock(bodyLabel);
+                var bodyId = GetChildNodeId(stmtNode, "body");
+                if (bodyId is int bStmtId)
+                {
+                    LowerEmbeddedStatement(bStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                }
+                if (!currentInstructions.Any(i => i.Terminator))
+                {
+                    currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = condLabel });
+                }
+                FinishBlock();
+
+                StartBlock(exitLabel);
+                continue;
+            }
+        }
+
+        if (!currentInstructions.Any(i => i.Terminator))
+        {
+            var returnType = ParseReturnType(entrySymbol.Type);
+            int? returnValue = null;
+            if (!IsVoid(returnType))
+            {
+                var existing = values.FirstOrDefault(v => v.Kind == "Parameter");
+                if (existing is not null)
+                {
+                    returnValue = existing.Id;
+                }
+                else
+                {
+                    var undefId = AllocateId(null, usedIds);
+                    values.Add(new IrValue { Id = undefId, Kind = "Undef", Type = returnType, Name = "undef_return" });
+                    returnValue = undefId;
+                }
+            }
+
+            currentInstructions.Add(new IrInstruction
+            {
+                Op = "Return",
+                Operands = returnValue is null ? Array.Empty<int>() : new[] { returnValue.Value },
+                Type = returnType,
+                Terminator = true
+            });
+        }
+
+        FinishBlock();
+
+        return blocks.ToArray();
+    }
+
+    private static void LowerEmbeddedStatement(int stmtId, Dictionary<int, SyntaxNodeInfo> nodeById, Dictionary<int, string> typeByNode, IReadOnlyList<SymbolInfo> symbols, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, List<IrDiagnostic> diagnostics, SymbolInfo entrySymbol)
+    {
+        if (!nodeById.TryGetValue(stmtId, out var node))
+        {
+            return;
+        }
+
+        if (string.Equals(node.Kind, "ReturnStatement", StringComparison.OrdinalIgnoreCase))
+        {
+            var exprId = GetChildNodeId(node, "expression");
+            int? valueId = null;
+            if (exprId is int eId)
+            {
+                valueId = LowerExpression(eId, nodeById, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+            }
+
+            var returnType = ParseReturnType(entrySymbol.Type);
+            if (!IsVoid(returnType) && valueId is null)
+            {
+                var undefId = AllocateId(null, usedIds);
+                values.Add(new IrValue { Id = undefId, Kind = "Undef", Type = returnType, Name = "undef_return" });
+                valueId = undefId;
+            }
+
+            instructions.Add(new IrInstruction
+            {
+                Op = "Return",
+                Operands = valueId is null ? Array.Empty<int>() : new[] { valueId.Value },
+                Type = returnType,
+                Terminator = true
+            });
+            return;
+        }
+
+        if (string.Equals(node.Kind, "ExpressionStatement", StringComparison.OrdinalIgnoreCase))
+        {
+            var exprId = GetChildNodeId(node, "expression");
+            if (exprId is int eId)
+            {
+                LowerExpression(eId, nodeById, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+            }
+        }
     }
 }
