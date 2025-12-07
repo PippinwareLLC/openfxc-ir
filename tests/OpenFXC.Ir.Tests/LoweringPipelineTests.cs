@@ -162,7 +162,7 @@ public class LoweringPipelineTests
         var block = Assert.Single(func.Blocks);
         Assert.True(block.Instructions.Count >= 1);
         Assert.Equal("Return", block.Instructions.Last().Op);
-        Assert.Contains(result.Diagnostics, d => d.Severity == "Error");
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
     }
 
     [Fact]

@@ -242,18 +242,40 @@ public sealed class LoweringPipeline
 
         if (string.Equals(node.Kind, "Identifier", StringComparison.OrdinalIgnoreCase))
         {
+            SymbolInfo? symbol = null;
             if (node.ReferencedSymbolId is int symId)
             {
-                var symbol = symbols.FirstOrDefault(s => s.Id == symId);
-                if (symbol is not null)
-                {
-                    if (ShouldLoad(symbol.Kind))
-                    {
-                        return EmitLoad(symbol, nodeId, typeByNode, values, valueBySymbol, usedIds, instructions);
-                    }
+                symbol = symbols.FirstOrDefault(s => s.Id == symId);
+            }
+            else
+            {
+                var type = typeByNode.TryGetValue(nodeId, out var t) ? t : null;
+                symbol = TryInferSymbolByType(type, symbols);
+            }
 
-                    return EnsureValue(symbol, values, valueBySymbol)?.Id;
+            if (symbol is not null)
+            {
+                if (symbol.Id is null)
+                {
+                    // Create a synthetic id to track the inferred symbol.
+                    var syntheticId = AllocateId(null, usedIds);
+                    symbol = new SymbolInfo
+                    {
+                        Id = syntheticId,
+                        Kind = symbol.Kind,
+                        Name = symbol.Name,
+                        Type = symbol.Type,
+                        ParentSymbolId = symbol.ParentSymbolId,
+                        Semantic = symbol.Semantic
+                    };
                 }
+
+                if (ShouldLoad(symbol.Kind))
+                {
+                    return EmitLoad(symbol, nodeId, typeByNode, values, valueBySymbol, usedIds, instructions);
+                }
+
+                return EnsureValue(symbol, values, valueBySymbol)?.Id;
             }
 
             diagnostics.Add(IrDiagnostic.Error($"Identifier node {node.Id} missing referenced symbol.", "lower"));
@@ -602,6 +624,25 @@ public sealed class LoweringPipeline
             "sample" => "Sample",
             _ => null
         };
+    }
+
+    private static SymbolInfo? TryInferSymbolByType(string? type, IReadOnlyList<SymbolInfo> symbols)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return null;
+
+        var candidates = symbols.Where(s =>
+            string.Equals(s.Type, type, StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(s.Kind, "CBufferMember", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(s.Kind, "StructMember", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(s.Kind, "GlobalVariable", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0];
+        }
+
+        return null;
     }
 
     private static string ResolveBinaryOp(string? op)

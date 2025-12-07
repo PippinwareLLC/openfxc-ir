@@ -4,9 +4,9 @@ Use this list to track remaining functional gaps to reach parity with expected l
 
 ## Lowering gaps
 - [ ] Cbuffer field loads: `sm4_cbuffer` snapshot still fails; add binding/field resolution so identifiers inside cbuffers lower to loads without diagnostics.
-- [ ] Structured buffers/UAVs: only read indexing lowers (`Index` op); no support for writes or RW* resources; no multidimensional/index swizzle support.
+- [ ] Structured buffers/UAVs: read indexing now lowers (`Index` op); no support for writes or RW* resources; no multidimensional/index swizzle support.
 - [ ] Stores/output writes: assignments to resources/globals/UAVs are unsupported; add store semantics or explicit diagnostics where writes appear.
-- [ ] Intrinsic coverage: only basic math/`tex*`/normalize/dot/etc.; add broader HLSL intrinsics (e.g., reflect/refract/exp/log/step/smoothstep/pow/atan2/fma, etc.).
+- [ ] Intrinsic coverage: expanded (basic math/`tex*` plus normalize/dot/pow/exp/log/step/smoothstep/reflect/refract/atan2/fma/etc.), but still missing broader HLSL set (e.g., transpose, determinant, noise, pack/unpack, etc.).
 - [ ] Control-flow value merges: no phi/merge handling; branches reuse plain value IDs and can be incorrect across paths.
 - [ ] SM1.x coverage: unimplemented; compatibility matrix remains “planned.”
 
