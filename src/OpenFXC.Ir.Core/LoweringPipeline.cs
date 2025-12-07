@@ -471,6 +471,21 @@ public sealed class LoweringPipeline
             }
         }
 
+        if (string.Equals(node.Kind, "LiteralExpression", StringComparison.OrdinalIgnoreCase) || string.Equals(node.Kind, "Literal", StringComparison.OrdinalIgnoreCase))
+        {
+            var resultType = typeByNode.TryGetValue(nodeId, out var litType) ? litType : "unknown";
+            var constId = AllocateId(null, usedIds);
+            values.Add(new IrValue
+            {
+                Id = constId,
+                Kind = "Constant",
+                Type = resultType,
+                Name = node.Operator ?? node.Swizzle ?? "literal"
+            });
+
+            return constId;
+        }
+
         if (string.Equals(node.Kind, "IndexExpression", StringComparison.OrdinalIgnoreCase))
         {
             var targetId = GetChildNodeId(node, "expression");
@@ -540,33 +555,53 @@ public sealed class LoweringPipeline
 
     private static string ResolveCallOp(string? calleeKind, string? calleeName)
     {
-        if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase))
+        var op = ResolveIntrinsicByName(calleeName);
+        if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase) && op is not null)
         {
-            return calleeName?.ToLowerInvariant() switch
-            {
-                "mul" => "Mul",
-                "dot" => "Dot",
-                "normalize" => "Normalize",
-                "saturate" => "Saturate",
-                "sin" => "Sin",
-                "cos" => "Cos",
-                "abs" => "Abs",
-                "min" => "Min",
-                "max" => "Max",
-                "clamp" => "Clamp",
-                "lerp" => "Lerp",
-                "ddx" => "Ddx",
-                "ddy" => "Ddy",
-                "length" => "Length",
-                "rsqrt" => "Rsqrt",
-                "rcp" => "Rcp",
-                var name when name is not null && name.StartsWith("tex") => "Sample",
-                "sample" => "Sample",
-                _ => "Call"
-            };
+            return op;
+        }
+
+        if (op is not null)
+        {
+            return op;
         }
 
         return "Call";
+    }
+
+    private static string? ResolveIntrinsicByName(string? calleeName)
+    {
+        return calleeName?.ToLowerInvariant() switch
+        {
+            "mul" => "Mul",
+            "dot" => "Dot",
+            "normalize" => "Normalize",
+            "saturate" => "Saturate",
+            "sin" => "Sin",
+            "cos" => "Cos",
+            "abs" => "Abs",
+            "min" => "Min",
+            "max" => "Max",
+            "clamp" => "Clamp",
+            "lerp" => "Lerp",
+            "pow" => "Pow",
+            "exp" => "Exp",
+            "log" => "Log",
+            "step" => "Step",
+            "smoothstep" => "SmoothStep",
+            "reflect" => "Reflect",
+            "refract" => "Refract",
+            "atan2" => "Atan2",
+            "fma" => "Fma",
+            "ddx" => "Ddx",
+            "ddy" => "Ddy",
+            "length" => "Length",
+            "rsqrt" => "Rsqrt",
+            "rcp" => "Rcp",
+            var name when name is not null && name.StartsWith("tex") => "Sample",
+            "sample" => "Sample",
+            _ => null
+        };
     }
 
     private static string ResolveBinaryOp(string? op)

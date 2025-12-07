@@ -137,6 +137,20 @@ public class LoweringPipelineTests
     }
 
     [Fact]
+    public void Lower_PowIntrinsic_MapsToPowOp()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForPow();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        Assert.Contains(block.Instructions, i => i.Op == "Pow");
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
+    }
+
+    [Fact]
     public void Lower_LoadsCbufferField()
     {
         var pipeline = new LoweringPipeline();
@@ -420,6 +434,38 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("cs_5_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForPow()
+    {
+        var hlsl = """
+        float main(float x : TEXCOORD0) : SV_Target
+        {
+            return pow(x, 2.0);
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("pow.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("ps_2_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {
