@@ -472,10 +472,11 @@ public sealed class LoweringPipeline
                             return null;
                         }
 
+                        rhsId = HarmonizeStoreTypes(baseOperandId.Value, rhsId.Value, values, instructions, usedIds);
                         instructions.Add(new IrInstruction
                         {
                             Op = "Store",
-                            Operands = new[] { baseOperandId.Value, idxVal.Value, rhsId.Value },
+                            Operands = new[] { baseOperandId.Value, idxVal.Value, rhsId!.Value },
                             Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown",
                             Tag = "indexed"
                         });
@@ -489,10 +490,11 @@ public sealed class LoweringPipeline
                             return null;
                         }
 
+                        rhsId = HarmonizeStoreTypes(baseVal.Id, rhsId.Value, values, instructions, usedIds);
                         instructions.Add(new IrInstruction
                         {
                             Op = "Store",
-                            Operands = new[] { baseVal.Id, rhsId.Value },
+                            Operands = new[] { baseVal.Id, rhsId!.Value },
                             Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown",
                             Tag = "direct"
                         });
@@ -516,11 +518,10 @@ public sealed class LoweringPipeline
             }
 
             var opName = ResolveBinaryOp(opText);
-            var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
-            if (IsComparisonOp(opName) || IsLogicalOp(opName))
-            {
-                resultType = "bool";
-            }
+            var promoted = HarmonizeNumericTypes(opName, leftId.Value, rightId.Value, values, instructions, usedIds, typeByNode.TryGetValue(nodeId, out var t) ? t : null);
+            leftId = promoted.leftId;
+            rightId = promoted.rightId;
+            var resultType = promoted.resultType;
             var resultId = AllocateId(null, usedIds);
             values.Add(new IrValue
             {
@@ -932,6 +933,123 @@ public sealed class LoweringPipeline
         };
     }
 
+    private static string? FindValueType(List<IrValue> values, int id)
+    {
+        return values.FirstOrDefault(v => v.Id == id)?.Type;
+    }
+
+    private static bool IsNumericScalar(string? scalar)
+    {
+        return scalar is "float" or "half" or "double" or "int" or "uint";
+    }
+
+    private static string? GetScalar(string? type)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return null;
+        var span = type.Trim();
+        var idx = 0;
+        while (idx < span.Length && char.IsLetter(span[idx])) idx++;
+        return idx == 0 ? span : span[..idx];
+    }
+
+    private static int GetComponentCount(string? type)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return 1;
+        var span = type.Trim();
+        var idx = 0;
+        while (idx < span.Length && char.IsLetter(span[idx])) idx++;
+        var value = 0;
+        while (idx < span.Length && char.IsDigit(span[idx]))
+        {
+            value = (value * 10) + (span[idx] - '0');
+            idx++;
+        }
+        return value == 0 ? 1 : value;
+    }
+
+    private static (string resultType, int leftId, int rightId) HarmonizeNumericTypes(string? opName, int leftId, int rightId, List<IrValue> values, List<IrInstruction> instructions, HashSet<int> usedIds, string? suggestedType)
+    {
+        if (IsComparisonOp(opName) || IsLogicalOp(opName))
+        {
+            return ("bool", leftId, rightId);
+        }
+
+        var leftType = FindValueType(values, leftId);
+        var rightType = FindValueType(values, rightId);
+        var leftScalar = GetScalar(leftType);
+        var rightScalar = GetScalar(rightType);
+        if (!IsNumericScalar(leftScalar) || !IsNumericScalar(rightScalar))
+        {
+            return (suggestedType ?? leftType ?? rightType ?? "unknown", leftId, rightId);
+        }
+
+        var promotedScalar = PromoteScalar(leftScalar!, rightScalar!);
+        var components = Math.Max(GetComponentCount(leftType), GetComponentCount(rightType));
+        var promotedType = components <= 1 ? promotedScalar : $"{promotedScalar}{components}";
+
+        var newLeftId = EnsureType(leftId, promotedType, values, instructions, usedIds);
+        var newRightId = EnsureType(rightId, promotedType, values, instructions, usedIds);
+
+        return (suggestedType ?? promotedType, newLeftId, newRightId);
+    }
+
+    private static int HarmonizeStoreTypes(int targetId, int valueId, List<IrValue> values, List<IrInstruction> instructions, HashSet<int> usedIds)
+    {
+        var targetType = FindValueType(values, targetId);
+        var valueType = FindValueType(values, valueId);
+        var targetScalar = GetScalar(targetType);
+        var valueScalar = GetScalar(valueType);
+        if (!IsNumericScalar(targetScalar) || !IsNumericScalar(valueScalar))
+        {
+            return valueId;
+        }
+        return EnsureType(valueId, targetType ?? valueType ?? "unknown", values, instructions, usedIds);
+    }
+
+    private static int HarmonizeReturnType(int valueId, string returnType, List<IrValue> values, List<IrInstruction> instructions, HashSet<int> usedIds)
+    {
+        var val = values.FirstOrDefault(v => v.Id == valueId);
+        if (val is null) return valueId;
+        var valScalar = GetScalar(val.Type);
+        var retScalar = GetScalar(returnType);
+        if (!IsNumericScalar(valScalar) || !IsNumericScalar(retScalar)) return valueId;
+        return EnsureType(valueId, returnType, values, instructions, usedIds);
+    }
+
+    private static string PromoteScalar(string left, string right)
+    {
+        if (left is "double" || right is "double") return "double";
+        if (left is "float" || right is "float") return "float";
+        if (left is "half" || right is "half") return "half";
+        if (left is "uint" || right is "uint") return "uint";
+        return "int";
+    }
+
+    private static int EnsureType(int sourceId, string targetType, List<IrValue> values, List<IrInstruction> instructions, HashSet<int> usedIds)
+    {
+        var sourceType = FindValueType(values, sourceId);
+        if (string.Equals(sourceType, targetType, StringComparison.OrdinalIgnoreCase))
+        {
+            return sourceId;
+        }
+
+        var castId = AllocateId(null, usedIds);
+        values.Add(new IrValue
+        {
+            Id = castId,
+            Kind = "Temp",
+            Type = targetType
+        });
+        instructions.Add(new IrInstruction
+        {
+            Op = "Cast",
+            Result = castId,
+            Operands = new[] { sourceId },
+            Type = targetType
+        });
+        return castId;
+    }
+
     private static int? GetChildNodeId(SyntaxNodeInfo node, string role)
     {
         var child = node.Children.FirstOrDefault(c => string.Equals(c.Role, role, StringComparison.OrdinalIgnoreCase));
@@ -1087,6 +1205,10 @@ public sealed class LoweringPipeline
                     values.Add(new IrValue { Id = undefId, Kind = "Undef", Type = returnType, Name = "undef_return" });
                     valueId = undefId;
                 }
+                else if (valueId is not null)
+                {
+                    valueId = HarmonizeReturnType(valueId.Value, returnType, values, currentInstructions, usedIds);
+                }
 
                 currentInstructions.Add(new IrInstruction
                 {
@@ -1112,15 +1234,15 @@ public sealed class LoweringPipeline
                 var condOperand = NormalizeCondition(condValue, condId);
 
                 var thenLabel = NewLabel("then");
-                var elseLabel = elseId is not null ? NewLabel("else") : null;
                 var mergeLabel = NewLabel("merge");
+                var elseLabel = elseId is not null ? NewLabel("else") : mergeLabel;
 
                 currentInstructions.Add(new IrInstruction
                 {
                     Op = "BranchCond",
                     Operands = condOperand is null ? Array.Empty<int>() : new[] { condOperand.Value },
                     Terminator = true,
-                    Tag = elseLabel is null ? $"then:{thenLabel}" : $"then:{thenLabel};else:{elseLabel}"
+                    Tag = $"then:{thenLabel};else:{elseLabel}"
                 });
                 FinishBlock();
 

@@ -72,23 +72,32 @@
               "type": "float4"
             },
             {
-              "op": "Binary",
+              "op": "Cast",
               "terminator": false,
               "result": 4,
               "operands": [
-                17,
                 3
+              ],
+              "type": "uint"
+            },
+            {
+              "op": "Binary",
+              "terminator": false,
+              "result": 5,
+              "operands": [
+                17,
+                4
               ],
               "type": "uint"
             },
             {
               "op": "Lerp",
               "terminator": false,
-              "result": 5,
+              "result": 6,
               "operands": [
                 2,
                 12,
-                4
+                5
               ],
               "type": "float4",
               "tag": "lerp"
@@ -97,7 +106,7 @@
               "op": "Return",
               "terminator": true,
               "operands": [
-                5
+                6
               ],
               "type": "float4"
             }
@@ -163,6 +172,11 @@
     },
     {
       "id": 5,
+      "type": "uint",
+      "kind": "Temp"
+    },
+    {
+      "id": 6,
       "type": "float4",
       "kind": "Temp"
     }

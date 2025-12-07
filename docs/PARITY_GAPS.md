@@ -31,6 +31,7 @@ Use this list to track remaining functional gaps to reach parity with expected l
 - [x] Lowering snapshots: `sm4_cbuffer` now included alongside other sample corpora with passing coverage.
 - [x] Negative tests: backend-leak detection, CFG invariants, and side-effect preservation are covered by regression cases.
 - [x] Corpus coverage: sample smoke tests now lower/optimize DXSDK `Tutorial02`/`Tutorial04`/`Tutorial06` shaders from `samples/`.
+- [ ] Corpus sweep failures: DXSDK corpus still failing on (a) numeric promotion/int-to-float/half widening for stores/binary ops, (b) `BranchCond` arity when only one branch exists, (c) return type widening (float3→float4) on PS signatures, and (d) JSON serialization depth/cycle errors on large DX11 shaders (adaptive tessellation/BC6H7 decoders).***
 
 ## CLI/docs
 - [x] Optimize pass defaults include the `component-dce` placeholder; clarify behavior when a pass is unavailable.
