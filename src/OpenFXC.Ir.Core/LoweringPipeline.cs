@@ -327,6 +327,21 @@ public sealed class LoweringPipeline
             return null;
         }
 
+        if (string.Equals(node.Kind, "MemberAccessExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            if (node.ReferencedSymbolId is int memberSymId)
+            {
+                var symbol = symbols.FirstOrDefault(s => s.Id == memberSymId);
+                if (symbol is not null)
+                {
+                    return EnsureValue(symbol, values, valueBySymbol)?.Id;
+                }
+            }
+
+            diagnostics.Add(IrDiagnostic.Error($"Member access node {node.Id} missing referenced symbol.", "lower"));
+            return null;
+        }
+
         if (string.Equals(node.Kind, "CallExpression", StringComparison.OrdinalIgnoreCase))
         {
             var argIds = new List<int>();
@@ -364,6 +379,75 @@ public sealed class LoweringPipeline
                 Operands = argIds,
                 Type = resultType,
                 Tag = calleeTag
+            });
+
+            return resultId;
+        }
+
+        if (string.Equals(node.Kind, "BinaryExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            var leftChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "left", StringComparison.OrdinalIgnoreCase));
+            var rightChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "right", StringComparison.OrdinalIgnoreCase));
+            var leftId = leftChild.NodeId is int lId
+                ? LowerExpression(lId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                : null;
+            var rightId = rightChild.NodeId is int rId
+                ? LowerExpression(rId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                : null;
+
+            if (leftId is null || rightId is null)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Failed to lower binary expression {node.Id}.", "lower"));
+                return null;
+            }
+
+            var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
+            var resultId = AllocateId(null, usedIds);
+            values.Add(new IrValue
+            {
+                Id = resultId,
+                Kind = "Temp",
+                Type = resultType
+            });
+
+            instructions.Add(new IrInstruction
+            {
+                Op = "Binary",
+                Result = resultId,
+                Operands = new[] { leftId.Value, rightId.Value },
+                Type = resultType
+            });
+
+            return resultId;
+        }
+
+        if (string.Equals(node.Kind, "UnaryExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            var operandChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "operand", StringComparison.OrdinalIgnoreCase));
+            var operandId = operandChild.NodeId is int opId
+                ? LowerExpression(opId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                : null;
+            if (operandId is null)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Failed to lower unary expression {node.Id}.", "lower"));
+                return null;
+            }
+
+            var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
+            var resultId = AllocateId(null, usedIds);
+            values.Add(new IrValue
+            {
+                Id = resultId,
+                Kind = "Temp",
+                Type = resultType
+            });
+
+            instructions.Add(new IrInstruction
+            {
+                Op = "Unary",
+                Result = resultId,
+                Operands = new[] { operandId.Value },
+                Type = resultType
             });
 
             return resultId;

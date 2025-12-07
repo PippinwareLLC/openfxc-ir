@@ -64,6 +64,9 @@ public sealed record IrInstruction
     [JsonPropertyName("op")]
     public string Op { get; init; } = "Nop";
 
+    [JsonPropertyName("terminator")]
+    public bool Terminator { get; init; }
+
     [JsonPropertyName("result")]
     public int? Result { get; init; }
 
@@ -72,9 +75,6 @@ public sealed record IrInstruction
 
     [JsonPropertyName("type")]
     public string? Type { get; init; }
-
-    [JsonPropertyName("terminator")]
-    public bool Terminator { get; init; }
 
     [JsonPropertyName("tag")]
     public string? Tag { get; init; }

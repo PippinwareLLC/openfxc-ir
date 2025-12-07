@@ -8,7 +8,7 @@
   - [x] Invariant helpers (SSA-ish, typed, block termination).
 
 - [ ] M2: Core lowering
-  - [ ] Functions/params/returns lowered.
+  - [x] Functions/params/returns lowered.
   - [ ] Expressions: binary/unary/swizzle/call/intrinsics.
   - [ ] Resources: texture/sampler/cbuffer/global representation; `Sample` op.
   - [ ] CFG: if/else and simple loop lowering.
