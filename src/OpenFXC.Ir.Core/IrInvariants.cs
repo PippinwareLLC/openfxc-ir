@@ -401,7 +401,7 @@ public static class IrInvariants
 
     private static bool IsNumericScalar(string? scalar)
     {
-        return scalar is "float" or "double" or "half" or "int" or "uint" or "bool";
+        return scalar is "float" or "double" or "half" or "int" or "uint";
     }
 
     private static string? GetScalarType(string? type)
@@ -460,11 +460,22 @@ public static class IrInvariants
     private static bool HasBackendSpecificTokens(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
+        static bool ContainsWhole(string haystack, string needle)
+        {
+            var span = haystack.AsSpan();
+            var idx = span.IndexOf(needle.AsSpan(), StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return false;
+            var beforeOk = idx == 0 || !char.IsLetter(span[idx - 1]);
+            var afterIndex = idx + needle.Length;
+            var afterOk = afterIndex >= span.Length || !char.IsLetter(span[afterIndex]);
+            return beforeOk && afterOk;
+        }
+
         return text.Contains("dxbc", StringComparison.OrdinalIgnoreCase)
                || text.Contains("dxil", StringComparison.OrdinalIgnoreCase)
                || text.Contains("spirv", StringComparison.OrdinalIgnoreCase)
                || text.Contains("d3d", StringComparison.OrdinalIgnoreCase)
                || text.Contains("glsl", StringComparison.OrdinalIgnoreCase)
-               || text.Contains("metal", StringComparison.OrdinalIgnoreCase);
+               || ContainsWhole(text, "metal");
     }
 }

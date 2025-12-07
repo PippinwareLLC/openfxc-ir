@@ -16,7 +16,7 @@ public class CorpusAllSamplesSweepTests
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        MaxDepth = 0 // allow deep DXSDK trees without cycle errors
+        MaxDepth = 256 // allow deep DXSDK trees without cycle errors
     };
 
     public static IEnumerable<object[]> CorpusFiles

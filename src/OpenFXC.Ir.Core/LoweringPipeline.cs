@@ -387,6 +387,20 @@ public sealed class LoweringPipeline
             }
 
             var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
+            var opName = ResolveCallOp(calleeKind, calleeTag);
+            if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase) && string.Equals(opName, "Call", StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Intrinsic '{calleeTag ?? "unknown"}' not supported by IR lowering.", "lower"));
+            }
+
+            if (string.Equals(opName, "Mul", StringComparison.OrdinalIgnoreCase) && argIds.Count >= 2)
+            {
+                var promoted = HarmonizeNumericTypes(opName, argIds[0], argIds[1], values, instructions, usedIds, resultType);
+                argIds[0] = promoted.leftId;
+                argIds[1] = promoted.rightId;
+                resultType = promoted.resultType;
+            }
+
             var resultId = AllocateId(null, usedIds);
             var resultValue = new IrValue
             {
@@ -395,12 +409,6 @@ public sealed class LoweringPipeline
                 Type = resultType
             };
             values.Add(resultValue);
-
-            var opName = ResolveCallOp(calleeKind, calleeTag);
-            if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase) && string.Equals(opName, "Call", StringComparison.OrdinalIgnoreCase))
-            {
-                diagnostics.Add(IrDiagnostic.Error($"Intrinsic '{calleeTag ?? "unknown"}' not supported by IR lowering.", "lower"));
-            }
 
             instructions.Add(new IrInstruction
             {
@@ -967,13 +975,34 @@ public sealed class LoweringPipeline
         return value == 0 ? 1 : value;
     }
 
+    private static bool IsMatrixType(string? type)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return false;
+        var span = type.Trim();
+        var idx = 0;
+        while (idx < span.Length && char.IsLetter(span[idx])) idx++;
+        while (idx < span.Length && char.IsDigit(span[idx])) idx++;
+        return idx < span.Length && span[idx] == 'x';
+    }
+
+    private static string BuildVectorType(string scalar, int components)
+    {
+        if (components <= 1) return scalar;
+        return $"{scalar}{components}";
+    }
+
+    private static string RewriteScalar(string? type, string scalar)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return scalar;
+        var span = type.Trim();
+        var idx = 0;
+        while (idx < span.Length && char.IsLetter(span[idx])) idx++;
+        var suffix = span[idx..];
+        return scalar + suffix;
+    }
+
     private static (string resultType, int leftId, int rightId) HarmonizeNumericTypes(string? opName, int leftId, int rightId, List<IrValue> values, List<IrInstruction> instructions, HashSet<int> usedIds, string? suggestedType)
     {
-        if (IsComparisonOp(opName) || IsLogicalOp(opName))
-        {
-            return ("bool", leftId, rightId);
-        }
-
         var leftType = FindValueType(values, leftId);
         var rightType = FindValueType(values, rightId);
         var leftScalar = GetScalar(leftType);
@@ -984,13 +1013,47 @@ public sealed class LoweringPipeline
         }
 
         var promotedScalar = PromoteScalar(leftScalar!, rightScalar!);
-        var components = Math.Max(GetComponentCount(leftType), GetComponentCount(rightType));
-        var promotedType = components <= 1 ? promotedScalar : $"{promotedScalar}{components}";
+        var leftIsMatrix = IsMatrixType(leftType);
+        var rightIsMatrix = IsMatrixType(rightType);
 
-        var newLeftId = EnsureType(leftId, promotedType, values, instructions, usedIds);
-        var newRightId = EnsureType(rightId, promotedType, values, instructions, usedIds);
+        var targetLeftType = leftType ?? $"{promotedScalar}{GetComponentCount(rightType)}";
+        var targetRightType = rightType ?? $"{promotedScalar}{GetComponentCount(leftType)}";
 
-        return (suggestedType ?? promotedType, newLeftId, newRightId);
+        if (leftIsMatrix)
+        {
+            targetLeftType = RewriteScalar(targetLeftType, promotedScalar);
+        }
+        else
+        {
+            targetLeftType = BuildVectorType(promotedScalar, GetComponentCount(leftType));
+        }
+
+        if (rightIsMatrix)
+        {
+            targetRightType = RewriteScalar(targetRightType, promotedScalar);
+        }
+        else
+        {
+            targetRightType = BuildVectorType(promotedScalar, GetComponentCount(rightType));
+        }
+
+        var newLeftId = EnsureType(leftId, targetLeftType, values, instructions, usedIds);
+        var newRightId = EnsureType(rightId, targetRightType, values, instructions, usedIds);
+
+        var resultType = suggestedType ?? (leftIsMatrix ? targetLeftType : targetRightType);
+        if (IsComparisonOp(opName))
+        {
+            resultType = "bool";
+        }
+
+        if (IsLogicalOp(opName))
+        {
+            var boolLeft = EnsureType(newLeftId, "bool", values, instructions, usedIds);
+            var boolRight = EnsureType(newRightId, "bool", values, instructions, usedIds);
+            return ("bool", boolLeft, boolRight);
+        }
+
+        return (resultType ?? promotedScalar, newLeftId, newRightId);
     }
 
     private static int HarmonizeStoreTypes(int targetId, int valueId, List<IrValue> values, List<IrInstruction> instructions, HashSet<int> usedIds)
@@ -1235,7 +1298,7 @@ public sealed class LoweringPipeline
 
                 var thenLabel = NewLabel("then");
                 var mergeLabel = NewLabel("merge");
-                var elseLabel = elseId is not null ? NewLabel("else") : mergeLabel;
+                var elseLabel = elseId is not null ? NewLabel("else") : NewLabel("else");
 
                 currentInstructions.Add(new IrInstruction
                 {
@@ -1427,7 +1490,7 @@ public sealed class LoweringPipeline
                 var existing = values.FirstOrDefault(v => v.Kind == "Parameter");
                 if (existing is not null)
                 {
-                    returnValue = existing.Id;
+                    returnValue = EnsureType(existing.Id, returnType, values, currentInstructions, usedIds);
                 }
                 else
                 {
@@ -1458,26 +1521,30 @@ public sealed class LoweringPipeline
             return;
         }
 
-        if (string.Equals(node.Kind, "ReturnStatement", StringComparison.OrdinalIgnoreCase))
-        {
-            var exprId = GetChildNodeId(node, "expression");
-            int? valueId = null;
-            if (exprId is int eId)
+            if (string.Equals(node.Kind, "ReturnStatement", StringComparison.OrdinalIgnoreCase))
             {
-                valueId = LowerExpression(eId, nodeById, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
-            }
+                var exprId = GetChildNodeId(node, "expression");
+                int? valueId = null;
+                if (exprId is int eId)
+                {
+                    valueId = LowerExpression(eId, nodeById, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+                }
 
-            var returnType = ParseReturnType(entrySymbol.Type);
-            if (!IsVoid(returnType) && valueId is null)
-            {
-                var undefId = AllocateId(null, usedIds);
-                values.Add(new IrValue { Id = undefId, Kind = "Undef", Type = returnType, Name = "undef_return" });
-                valueId = undefId;
-            }
+                var returnType = ParseReturnType(entrySymbol.Type);
+                if (!IsVoid(returnType) && valueId is null)
+                {
+                    var undefId = AllocateId(null, usedIds);
+                    values.Add(new IrValue { Id = undefId, Kind = "Undef", Type = returnType, Name = "undef_return" });
+                    valueId = undefId;
+                }
+                else if (valueId is not null)
+                {
+                    valueId = HarmonizeReturnType(valueId.Value, returnType, values, instructions, usedIds);
+                }
 
-            instructions.Add(new IrInstruction
-            {
-                Op = "Return",
+                instructions.Add(new IrInstruction
+                {
+                    Op = "Return",
                 Operands = valueId is null ? Array.Empty<int>() : new[] { valueId.Value },
                 Type = returnType,
                 Terminator = true
