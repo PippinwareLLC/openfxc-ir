@@ -9,8 +9,8 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 
 ## Scope (optimize)
 - Input: IR JSON from `openfxc-ir lower`.
-- Output: optimized IR JSON, preserving invariants and backend agnosticism (passes not implemented yet).
-- CLI goal: `openfxc-ir optimize --passes constfold,dce,component-dce,copyprop,algebraic < input.ir.json > output.ir.opt.json`.
+- Output: optimized IR JSON (pipeline currently a passthrough scaffold that validates IR and notes unimplemented passes).
+- CLI: `openfxc-ir optimize --passes constfold,dce,component-dce,copyprop,algebraic < input.ir.json > output.ir.opt.json`.
 
 ## Key principles
 - Backend-agnostic: no DXBC/DXIL/SPIR-V opcodes, registers, or containers.
@@ -33,6 +33,7 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 - Build: `dotnet build openfxc-ir.sln`
 - Lower (library): `var module = new LoweringPipeline().Lower(new LoweringRequest(semanticJson, profileOverride, entryOverride));`
 - Lower (CLI): `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile vs_2_0 | openfxc-ir lower --entry main > foo.ir.json`
+- Optimize (CLI scaffold): `openfxc-ir optimize --passes constfold,dce --input foo.ir.json > foo.ir.opt.json`
 - Tests: `dotnet test` (includes snapshot goldens under `tests/OpenFXC.Ir.Tests/snapshots`).
 
 ## Docs

@@ -26,9 +26,9 @@
   - [x] README/TDD alignment, schema notes, usage examples.
   - [x] Compatibility matrix for IR (coverage by SM era/features).
 
-- [ ] M6: Optimize pipeline skeleton
-  - [ ] `openfxc-ir optimize` verb, pass selection (`--passes`), passthrough scaffold.
-  - [ ] Share IR model/invariants from lower stage.
+- [x] M6: Optimize pipeline skeleton
+  - [x] `openfxc-ir optimize` verb, pass selection (`--passes`), passthrough scaffold.
+  - [x] Share IR model/invariants from lower stage.
 
 - [ ] M7: Core optimize passes
   - [ ] Constant folding.
