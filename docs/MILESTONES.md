@@ -22,9 +22,9 @@
   - [x] Snapshot tests over small HLSL corpus (SM2/3/4/5, FX entry).
   - [x] Invariant tests over IR JSON (SSA-ish, typed, no DX9 artifacts).
 
-- [ ] M5: Docs + polish (lower)
-  - [ ] README/TDD alignment, schema notes, usage examples.
-  - [ ] Compatibility matrix for IR (coverage by SM era/features).
+- [x] M5: Docs + polish (lower)
+  - [x] README/TDD alignment, schema notes, usage examples.
+  - [x] Compatibility matrix for IR (coverage by SM era/features).
 
 - [ ] M6: Optimize pipeline skeleton
   - [ ] `openfxc-ir optimize` verb, pass selection (`--passes`), passthrough scaffold.
