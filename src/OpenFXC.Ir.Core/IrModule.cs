@@ -22,6 +22,9 @@ public sealed record IrModule
     [JsonPropertyName("resources")]
     public IReadOnlyList<IrResource> Resources { get; init; } = Array.Empty<IrResource>();
 
+    [JsonPropertyName("techniques")]
+    public IReadOnlyList<IrFxTechnique> Techniques { get; init; } = Array.Empty<IrFxTechnique>();
+
     [JsonPropertyName("diagnostics")]
     public IReadOnlyList<IrDiagnostic> Diagnostics { get; init; } = Array.Empty<IrDiagnostic>();
 }
@@ -90,6 +93,10 @@ public sealed record IrResource
 
     [JsonPropertyName("type")]
     public string Type { get; init; } = string.Empty;
+
+    [JsonPropertyName("writable")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Writable { get; init; }
 }
 
 public sealed record IrValue
@@ -108,6 +115,51 @@ public sealed record IrValue
 
     [JsonPropertyName("semantic")]
     public string? Semantic { get; init; }
+}
+
+public sealed record IrFxTechnique
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("passes")]
+    public IReadOnlyList<IrFxPass> Passes { get; init; } = Array.Empty<IrFxPass>();
+}
+
+public sealed record IrFxPass
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("shaders")]
+    public IReadOnlyList<IrFxShaderBinding> Shaders { get; init; } = Array.Empty<IrFxShaderBinding>();
+
+    [JsonPropertyName("states")]
+    public IReadOnlyList<IrFxStateAssignment> States { get; init; } = Array.Empty<IrFxStateAssignment>();
+}
+
+public sealed record IrFxShaderBinding
+{
+    [JsonPropertyName("stage")]
+    public string Stage { get; init; } = string.Empty;
+
+    [JsonPropertyName("profile")]
+    public string? Profile { get; init; }
+
+    [JsonPropertyName("entry")]
+    public string? Entry { get; init; }
+
+    [JsonPropertyName("entrySymbolId")]
+    public int? EntrySymbolId { get; init; }
+}
+
+public sealed record IrFxStateAssignment
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("value")]
+    public string? Value { get; init; }
 }
 
 public sealed record IrDiagnostic

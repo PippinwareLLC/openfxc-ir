@@ -46,7 +46,7 @@ public sealed class OptimizePipeline
     {
         if (string.IsNullOrWhiteSpace(passes))
         {
-            return new[] { "constfold", "algebraic", "copyprop", "dce", "component-dce" };
+            return new[] { "constfold", "algebraic", "copyprop", "cse", "dce", "component-dce" };
         }
 
         return passes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -64,6 +64,7 @@ public sealed class OptimizePipeline
                 "algebraic" => OptimizePasses.AlgebraicSimplify(module, diagnostics),
                 "copyprop" => OptimizePasses.CopyPropagate(module, diagnostics),
                 "dce" => OptimizePasses.DeadCodeEliminate(module, diagnostics),
+                "cse" => OptimizePasses.CommonSubexpressionEliminate(module, diagnostics),
                 "component-dce" => OptimizePasses.ComponentDce(module, diagnostics),
                 _ => WithUnknownPassDiag(module, diagnostics, pass)
             };
@@ -74,7 +75,7 @@ public sealed class OptimizePipeline
 
     private static IrModule WithUnknownPassDiag(IrModule module, List<IrDiagnostic> diagnostics, string pass)
     {
-        diagnostics.Add(IrDiagnostic.Info($"Pass '{pass}' not recognized; skipping.", "optimize"));
+        diagnostics.Add(IrDiagnostic.Error($"Pass '{pass}' not recognized; available passes: {string.Join(", ", ParsePasses(null))}.", "optimize"));
         return module;
     }
 }

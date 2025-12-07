@@ -1,0 +1,212 @@
+{
+  "formatVersion": 1,
+  "profile": "ps_4_0",
+  "entryPoint": {
+    "function": "main",
+    "stage": "Pixel"
+  },
+  "functions": [
+    {
+      "name": "main",
+      "returnType": "float4",
+      "parameters": [
+        16
+      ],
+      "blocks": [
+        {
+          "id": "entry",
+          "instructions": [
+            {
+              "op": "Load",
+              "terminator": false,
+              "result": 1,
+              "operands": [
+                27
+              ],
+              "type": "float4"
+            },
+            {
+              "op": "Load",
+              "terminator": false,
+              "result": 3,
+              "operands": [
+                2
+              ],
+              "type": "float"
+            },
+            {
+              "op": "Swizzle",
+              "terminator": false,
+              "result": 4,
+              "operands": [
+                3
+              ],
+              "type": "float3",
+              "tag": "xxx"
+            },
+            {
+              "op": "Call",
+              "terminator": false,
+              "result": 7,
+              "operands": [
+                4,
+                5
+              ],
+              "type": "float4",
+              "tag": "float4"
+            },
+            {
+              "op": "Load",
+              "terminator": false,
+              "result": 8,
+              "operands": [
+                44
+              ],
+              "type": "float"
+            },
+            {
+              "op": "Lerp",
+              "terminator": false,
+              "result": 10,
+              "operands": [
+                1,
+                7,
+                8
+              ],
+              "type": "float4",
+              "tag": "lerp"
+            },
+            {
+              "op": "Return",
+              "terminator": true,
+              "operands": [
+                10
+              ],
+              "type": "float4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": 6,
+      "type": "SamplerState",
+      "kind": "Sampler",
+      "name": "Samp"
+    },
+    {
+      "id": 9,
+      "type": "unknown",
+      "kind": "CBuffer",
+      "name": "Params"
+    },
+    {
+      "id": 16,
+      "type": "float2",
+      "kind": "Parameter",
+      "name": "uv",
+      "semantic": "TEXCOORD0"
+    },
+    {
+      "id": 27,
+      "type": "float4",
+      "kind": "LocalVariable",
+      "name": "color"
+    },
+    {
+      "id": 1,
+      "type": "float4",
+      "kind": "Temp"
+    },
+    {
+      "id": 2,
+      "type": "float",
+      "kind": "CBufferMember",
+      "name": "Gain"
+    },
+    {
+      "id": 3,
+      "type": "float",
+      "kind": "Temp"
+    },
+    {
+      "id": 4,
+      "type": "float3",
+      "kind": "Temp"
+    },
+    {
+      "id": 5,
+      "type": "float",
+      "kind": "Constant",
+      "name": "literal"
+    },
+    {
+      "id": 7,
+      "type": "float4",
+      "kind": "Temp"
+    },
+    {
+      "id": 44,
+      "type": "float",
+      "kind": "LocalVariable",
+      "name": "mask"
+    },
+    {
+      "id": 8,
+      "type": "float",
+      "kind": "Temp"
+    },
+    {
+      "id": 10,
+      "type": "float4",
+      "kind": "Temp"
+    }
+  ],
+  "resources": [
+    {
+      "name": "Samp",
+      "kind": "Sampler",
+      "type": "SamplerState"
+    },
+    {
+      "name": "Params",
+      "kind": "CBuffer",
+      "type": "unknown"
+    }
+  ],
+  "techniques": [],
+  "diagnostics": [
+    {
+      "message": "constfold executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "algebraic executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "copyprop executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "cse executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "dce executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "component-dce executed",
+      "severity": "Info",
+      "stage": "optimize"
+    }
+  ]
+}

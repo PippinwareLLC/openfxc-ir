@@ -58,6 +58,7 @@ public sealed class LoweringPipeline
                 },
             Values = values,
             Resources = resources,
+            Techniques = LowerTechniques(semantic),
             Functions = functions,
             Diagnostics = diagnostics
         };
@@ -66,6 +67,37 @@ public sealed class LoweringPipeline
         {
             Diagnostics = module.Diagnostics.Concat(IrInvariants.Validate(module)).ToArray()
         };
+    }
+
+    private static IReadOnlyList<IrFxTechnique> LowerTechniques(SemanticOutput semantic)
+    {
+        if (semantic.Techniques is null || semantic.Techniques.Count == 0)
+        {
+            return Array.Empty<IrFxTechnique>();
+        }
+
+        return semantic.Techniques
+            .Select(t => new IrFxTechnique
+            {
+                Name = t.Name ?? string.Empty,
+                Passes = t.Passes.Select(p => new IrFxPass
+                {
+                    Name = p.Name ?? string.Empty,
+                    Shaders = p.Shaders.Select(s => new IrFxShaderBinding
+                    {
+                        Stage = s.Stage,
+                        Profile = s.Profile,
+                        Entry = s.Entry,
+                        EntrySymbolId = s.EntrySymbolId
+                    }).ToArray(),
+                    States = p.States.Select(s => new IrFxStateAssignment
+                    {
+                        Name = s.Name,
+                        Value = s.Value
+                    }).ToArray()
+                }).ToArray()
+            })
+            .ToArray();
     }
 
     private static SemanticOutput DeserializeSemantic(string semanticJson)
@@ -191,7 +223,8 @@ public sealed class LoweringPipeline
             {
                 Name = symbol.Name ?? string.Empty,
                 Kind = symbol.Kind ?? string.Empty,
-                Type = symbol.Type ?? "unknown"
+                Type = symbol.Type ?? "unknown",
+                Writable = IsWritableResource(symbol.Kind, symbol.Type)
             });
 
             EnsureValue(symbol, values, valueBySymbol, defaultKind: symbol.Kind ?? "Resource");
@@ -392,8 +425,9 @@ public sealed class LoweringPipeline
             // Handle assignment to storeable targets.
             if (leftNode is not null)
             {
-                var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols);
-                if (targetSymbol is not null && ShouldStore(targetSymbol.Kind))
+                var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols)
+                                  ?? TryResolveIndexBaseSymbol(leftNode, nodes, typeByNode, symbols);
+                if (targetSymbol is not null && ShouldStore(targetSymbol))
                 {
                     var rhsId = rightChild?.NodeId is int rId
                         ? LowerExpression(rId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
@@ -437,17 +471,25 @@ public sealed class LoweringPipeline
                         {
                             Op = "Store",
                             Operands = new[] { baseOperandId.Value, idxVal.Value, rhsId.Value },
-                            Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown"
+                            Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown",
+                            Tag = "indexed"
                         });
                     }
                     else
                     {
                         var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+                        if (baseVal is null)
+                        {
+                            diagnostics.Add(IrDiagnostic.Error($"Failed to resolve store target for node {node.Id}.", "lower"));
+                            return null;
+                        }
+
                         instructions.Add(new IrInstruction
                         {
                             Op = "Store",
-                            Operands = baseVal is null ? new[] { rhsId.Value } : new[] { baseVal.Id, rhsId.Value },
-                            Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown"
+                            Operands = new[] { baseVal.Id, rhsId.Value },
+                            Type = typeByNode.TryGetValue(nodeId, out var st) ? st : targetSymbol.Type ?? "unknown",
+                            Tag = "direct"
                         });
                     }
 
@@ -623,8 +665,9 @@ public sealed class LoweringPipeline
                 return null;
             }
 
-            var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols);
-            if (targetSymbol is null || !ShouldStore(targetSymbol.Kind))
+            var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols)
+                              ?? TryResolveIndexBaseSymbol(leftNode, nodes, typeByNode, symbols);
+            if (targetSymbol is null || !ShouldStore(targetSymbol))
             {
                 diagnostics.Add(IrDiagnostic.Error($"Unsupported assignment target at node {node.Id}.", "lower"));
                 return null;
@@ -640,11 +683,17 @@ public sealed class LoweringPipeline
             }
 
             var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+            if (baseVal is null)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Failed to resolve store target for node {node.Id}.", "lower"));
+                return null;
+            }
             instructions.Add(new IrInstruction
             {
                 Op = "Store",
-                Operands = baseVal is null ? new[] { rhsId.Value } : new[] { baseVal.Id, rhsId.Value },
-                Type = typeByNode.TryGetValue(nodeId, out var at) ? at : targetSymbol.Type ?? "unknown"
+                Operands = new[] { baseVal.Id, rhsId.Value },
+                Type = typeByNode.TryGetValue(nodeId, out var at) ? at : targetSymbol.Type ?? "unknown",
+                Tag = "direct"
             });
 
             return rhsId;
@@ -703,6 +752,9 @@ public sealed class LoweringPipeline
             "mul" => "Mul",
             "dot" => "Dot",
             "normalize" => "Normalize",
+            "transpose" => "Transpose",
+            "determinant" => "Determinant",
+            "noise" => "Noise",
             "saturate" => "Saturate",
             "sin" => "Sin",
             "cos" => "Cos",
@@ -713,6 +765,8 @@ public sealed class LoweringPipeline
             "lerp" => "Lerp",
             "pow" => "Pow",
             "exp" => "Exp",
+            "exp2" => "Exp2",
+            "log2" => "Log2",
             "log" => "Log",
             "step" => "Step",
             "smoothstep" => "SmoothStep",
@@ -723,6 +777,20 @@ public sealed class LoweringPipeline
             "ddx" => "Ddx",
             "ddy" => "Ddy",
             "length" => "Length",
+            "distance" => "Distance",
+            "cross" => "Cross",
+            "frac" => "Frac",
+            "floor" => "Floor",
+            "ceil" => "Ceil",
+            "round" => "Round",
+            "trunc" => "Trunc",
+            "radians" => "Radians",
+            "degrees" => "Degrees",
+            "asuint" => "AsUint",
+            "asfloat" => "AsFloat",
+            "asint" => "AsInt",
+            "pack" => "Pack",
+            "unpack" => "Unpack",
             "rsqrt" => "Rsqrt",
             "rcp" => "Rcp",
             var name when name is not null && name.StartsWith("tex") => "Sample",
@@ -764,6 +832,19 @@ public sealed class LoweringPipeline
         }
 
         return TryInferSymbolByType(node.Operator ?? node.Swizzle, symbols);
+    }
+
+    private static SymbolInfo? TryResolveIndexBaseSymbol(SyntaxNodeInfo node, Dictionary<int, SyntaxNodeInfo> nodes, Dictionary<int, string> typeByNode, IReadOnlyList<SymbolInfo> symbols)
+    {
+        if (!string.Equals(node.Kind, "IndexExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var baseChildId = GetChildNodeId(node, "expression");
+        return baseChildId is int bId && nodes.TryGetValue(bId, out var baseNode)
+            ? ResolveSymbolFromNode(baseNode, bId, typeByNode, symbols)
+            : null;
     }
 
     private static SyntaxNodeChild? GetChildByRoles(SyntaxNodeInfo node, params string[] roles)
@@ -824,17 +905,44 @@ public sealed class LoweringPipeline
                || symbolKind.Equals("CBuffer", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("CBufferMember", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("Buffer", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("LocalVariable", StringComparison.OrdinalIgnoreCase)
                || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool ShouldStore(string? symbolKind)
+    private static bool ShouldStore(SymbolInfo symbol)
     {
+        var symbolKind = symbol.Kind;
         if (symbolKind is null) return false;
-        return symbolKind.Equals("GlobalVariable", StringComparison.OrdinalIgnoreCase)
-               || symbolKind.Equals("CBufferMember", StringComparison.OrdinalIgnoreCase)
-               || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase)
-               || symbolKind.StartsWith("RW", StringComparison.OrdinalIgnoreCase)
-               || symbolKind.Equals("Buffer", StringComparison.OrdinalIgnoreCase);
+        if (symbolKind.Equals("GlobalVariable", StringComparison.OrdinalIgnoreCase)
+            || symbolKind.Equals("LocalVariable", StringComparison.OrdinalIgnoreCase)
+            || symbolKind.Equals("CBufferMember", StringComparison.OrdinalIgnoreCase)
+            || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (symbolKind.StartsWith("RW", StringComparison.OrdinalIgnoreCase)
+            || symbolKind.Contains("UAV", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (symbolKind.Equals("Buffer", StringComparison.OrdinalIgnoreCase) && symbol.Type?.StartsWith("RW", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        return symbolKind.Equals("Resource", StringComparison.OrdinalIgnoreCase)
+               && symbol.Type?.StartsWith("RW", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool IsWritableResource(string? kind, string? type)
+    {
+        if (kind is null && type is null) return false;
+        if (kind?.StartsWith("RW", StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (kind?.Contains("UAV", StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (type?.StartsWith("RW", StringComparison.OrdinalIgnoreCase) == true) return true;
+        return false;
     }
 
     private static int EmitLoad(SymbolInfo symbol, int nodeId, Dictionary<int, string> typeByNode, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, string? tag = null)
@@ -1112,6 +1220,9 @@ public sealed class LoweringPipeline
                 StartBlock(exitLabel);
                 continue;
             }
+
+            // Generic expression or simple statement.
+            LowerEmbeddedStatement(stmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
         }
 
         if (!currentInstructions.Any(i => i.Terminator))

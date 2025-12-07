@@ -14,10 +14,9 @@ public class OptimizeSnapshotTests
         WriteIndented = true
     };
 
-    [Fact]
-    public void Optimize_LowerThenOptimize_MatchesSnapshot()
-    {
-        var hlsl = """
+    [Theory]
+    [InlineData(
+        """
         sampler2D S;
 
         float4 main(float2 uv : TEXCOORD0) : SV_Target
@@ -25,14 +24,65 @@ public class OptimizeSnapshotTests
             float2 uv2 = uv;
             return tex2D(S, uv2);
         }
-        """;
+        """,
+        "ps_2_0",
+        "ps_texture.opt.ir.json")]
+    [InlineData(
+        """
+        float4 main(float4 a : COLOR0, float4 b : COLOR1, uint i : TEXCOORD0) : SV_Target
+        {
+            float4 acc = a;
+            int idx = 0;
+            bool keepGoing = true;
+            while (keepGoing)
+            {
+                acc += b;
+                idx++;
+                keepGoing = idx < 3;
+            }
 
-        var semanticJson = BuildSemanticJson(hlsl, "ps_2_0", "main");
-        var lower = new LoweringPipeline().Lower(new LoweringRequest(semanticJson, null, "main"));
-        var optimized = new OptimizePipeline().Optimize(new OptimizeRequest(JsonSerializer.Serialize(lower, SerializerOptions), null, null));
-        var actualJson = JsonSerializer.Serialize(optimized, SerializerOptions);
+            return lerp(acc, b, (i & 1) ? 1.0 : 0.0);
+        }
+        """,
+        "ps_3_0",
+        "ps_branch_loop.opt.ir.json")]
+    [InlineData(
+        """
+        Texture2D Tex;
+        SamplerState Samp;
+        cbuffer Params : register(b0)
+        {
+            float Gain;
+        };
 
-        var snapshotPath = SnapshotPath("ps_texture.opt.ir.json");
+        float4 main(float2 uv : TEXCOORD0) : SV_Target
+        {
+            float4 color = Tex.Sample(Samp, uv);
+            float mask = step(0.25, uv.x) * step(0.25, uv.y);
+            return lerp(color, float4(Gain.xxx, 1.0), mask);
+        }
+        """,
+        "ps_4_0",
+        "ps4_sample_mask.opt.ir.json")]
+    [InlineData(
+        """
+        Texture2D Tex;
+        SamplerState Samp;
+
+        float4 main(float2 uv : TEXCOORD0) : SV_Target
+        {
+            float4 color = Tex.Sample(Samp, uv);
+            float weight = saturate(uv.x + uv.y);
+            return lerp(color, float4(weight.xxx, 1.0), weight);
+        }
+        """,
+        "ps_5_0",
+        "ps5_unrolled_sample.opt.ir.json")]
+    public void Optimize_LowerThenOptimize_MatchesSnapshot(string hlsl, string profile, string snapshotName)
+    {
+        var actualJson = RunOptimize(hlsl, profile, "main");
+
+        var snapshotPath = SnapshotPath(snapshotName);
         MaybeUpdateSnapshot(snapshotPath, actualJson);
 
         var expectedJson = File.ReadAllText(snapshotPath);
@@ -40,7 +90,15 @@ public class OptimizeSnapshotTests
         using var actualDoc = JsonDocument.Parse(actualJson);
 
         Assert.True(JsonEqual(expectedDoc.RootElement, actualDoc.RootElement), "Optimized snapshot mismatch.");
+    }
+
+    private static string RunOptimize(string hlsl, string profile, string entry)
+    {
+        var semanticJson = BuildSemanticJson(hlsl, profile, entry);
+        var lower = new LoweringPipeline().Lower(new LoweringRequest(semanticJson, null, entry));
+        var optimized = new OptimizePipeline().Optimize(new OptimizeRequest(JsonSerializer.Serialize(lower, SerializerOptions), null, null));
         Assert.DoesNotContain(optimized.Diagnostics, d => string.Equals(d.Severity, "Error", StringComparison.OrdinalIgnoreCase));
+        return JsonSerializer.Serialize(optimized, SerializerOptions);
     }
 
     private static string BuildSemanticJson(string hlsl, string profile, string entry)

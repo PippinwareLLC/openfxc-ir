@@ -46,7 +46,9 @@ public class OptimizeComponentDceTests
 
         var swizzle = optimized.Functions.Single().Blocks.Single().Instructions.First();
         Assert.Equal("Swizzle", swizzle.Op);
-        Assert.NotNull(swizzle.Tag); // placeholder currently no-op; ensure it survives
+        Assert.Equal("x", swizzle.Tag);
+        Assert.Equal("float", swizzle.Type);
+        Assert.Contains(optimized.Values, v => v.Id == 2 && v.Type == "float");
         Assert.DoesNotContain(optimized.Diagnostics, d => d.Severity == "Error");
     }
 }

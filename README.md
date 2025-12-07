@@ -9,9 +9,9 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 
 ## Scope (optimize)
 - Input: IR JSON from `openfxc-ir lower`.
-- Output: optimized IR JSON (pipeline runs constfold, algebraic, copyprop, DCE; `component-dce` currently a placeholder).
+- Output: optimized IR JSON (pipeline runs constfold, algebraic, copyprop, DCE, and component-level DCE).
 - CLI: `openfxc-ir optimize [--passes constfold,dce,component-dce,copyprop,algebraic] [--profile <name>] [--input <path>] < input.ir.json > output.ir.opt.json`.
-- Defaults: when `--passes` is omitted, all available passes (constfold, algebraic, copyprop, dce, component-dce placeholder) run in that order.
+- Defaults: when `--passes` is omitted, all available passes (constfold, algebraic, copyprop, dce, component-dce) run in that order; unknown passes now surface errors that list available options.
 
 ## Key principles
 - Backend-agnostic: no DXBC/DXIL/SPIR-V opcodes, registers, or containers.
@@ -21,8 +21,8 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 ## Compatibility matrix (current)
 | Profile band | Lower | Optimize | Notes |
 | --- | --- | --- | --- |
-| SM1.x (vs_1_1/ps_1_1) | Planned | Planned | Depends on `openfxc-sem`; expect diagnostics for unsupported legacy intrinsics. |
-| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`, normalize/dot/etc.). | **Alpha**: constfold/algebraic/copyprop/DCE; `component-dce` placeholder. | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
+| SM1.x (vs_1_1/ps_1_1) | **Alpha**: baseline ps_1_1 lowering validated; legacy intrinsic coverage still limited. | Planned | Depends on `openfxc-sem`; expect diagnostics for unsupported legacy intrinsics. |
+| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`, normalize/dot/etc.). | **Alpha**: constfold/algebraic/copyprop/DCE; component-DCE implemented. | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
 | SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Experimental**: arithmetic/control flow lower; resource loads partly handled (structured buffer indexing now supported; cbuffer field binding gaps remain). | **Experimental**: optimize passes run on math/flow only; resource gaps remain. | Snapshots capture current status (`sm4_cbuffer` still diagnostic; `sm5_structured` succeeds). |
 | FX (techniques/passes) | **Minimal**: entry lowering works when present; technique metadata not yet projected into IR. | **Passthrough**: optimize ignores FX metadata; runs generic passes on IR. | Snapshot `fx_basic` covers entry path. |
 

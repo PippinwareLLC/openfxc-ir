@@ -39,5 +39,35 @@
     }
   ],
   "resources": [],
+  "techniques": [
+    {
+      "name": "Simple",
+      "passes": [
+        {
+          "name": "First",
+          "shaders": [
+            {
+              "stage": "Vertex",
+              "profile": "vs_2_0",
+              "entry": "main",
+              "entrySymbolId": 13
+            },
+            {
+              "stage": "Pixel",
+              "profile": "ps_2_0",
+              "entry": "main",
+              "entrySymbolId": 13
+            }
+          ],
+          "states": [
+            {
+              "name": "ZEnable",
+              "value": "TRUE"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "diagnostics": []
 }

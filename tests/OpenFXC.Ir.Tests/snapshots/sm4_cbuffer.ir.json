@@ -26,20 +26,20 @@
               "type": "float4"
             },
             {
-              "op": "Mul",
+              "op": "Store",
               "terminator": false,
-              "result": 4,
               "operands": [
                 27,
                 2
               ],
-              "type": "float4"
+              "type": "float4",
+              "tag": "direct"
             },
             {
               "op": "Return",
               "terminator": true,
               "operands": [
-                4
+                2
               ],
               "type": "float4"
             }
@@ -63,12 +63,6 @@
       "semantic": "SV_POSITION0"
     },
     {
-      "id": 27,
-      "type": "float4",
-      "kind": "LocalVariable",
-      "name": "p"
-    },
-    {
       "id": 1,
       "type": "float4",
       "kind": "CBufferMember",
@@ -80,9 +74,10 @@
       "kind": "Temp"
     },
     {
-      "id": 4,
+      "id": 27,
       "type": "float4",
-      "kind": "Temp"
+      "kind": "LocalVariable",
+      "name": "p"
     }
   ],
   "resources": [
@@ -92,5 +87,6 @@
       "type": "unknown"
     }
   ],
+  "techniques": [],
   "diagnostics": []
 }

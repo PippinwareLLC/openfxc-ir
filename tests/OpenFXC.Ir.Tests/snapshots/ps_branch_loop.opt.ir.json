@@ -1,0 +1,204 @@
+{
+  "formatVersion": 1,
+  "profile": "ps_3_0",
+  "entryPoint": {
+    "function": "main",
+    "stage": "Pixel"
+  },
+  "functions": [
+    {
+      "name": "main",
+      "returnType": "float4",
+      "parameters": [
+        7,
+        12,
+        17
+      ],
+      "blocks": [
+        {
+          "id": "entry",
+          "instructions": [
+            {
+              "op": "Branch",
+              "terminator": true,
+              "operands": [],
+              "tag": "while.cond1"
+            }
+          ]
+        },
+        {
+          "id": "while.cond1",
+          "instructions": [
+            {
+              "op": "Load",
+              "terminator": false,
+              "result": 1,
+              "operands": [
+                31
+              ],
+              "type": "bool"
+            },
+            {
+              "op": "BranchCond",
+              "terminator": true,
+              "operands": [
+                1
+              ],
+              "tag": "then:while.body2;else:while.exit3"
+            }
+          ]
+        },
+        {
+          "id": "while.body2",
+          "instructions": [
+            {
+              "op": "Branch",
+              "terminator": true,
+              "operands": [],
+              "tag": "while.cond1"
+            }
+          ]
+        },
+        {
+          "id": "while.exit3",
+          "instructions": [
+            {
+              "op": "Load",
+              "terminator": false,
+              "result": 2,
+              "operands": [
+                23
+              ],
+              "type": "float4"
+            },
+            {
+              "op": "Binary",
+              "terminator": false,
+              "result": 4,
+              "operands": [
+                17,
+                3
+              ],
+              "type": "uint"
+            },
+            {
+              "op": "Lerp",
+              "terminator": false,
+              "result": 5,
+              "operands": [
+                2,
+                12,
+                4
+              ],
+              "type": "float4",
+              "tag": "lerp"
+            },
+            {
+              "op": "Return",
+              "terminator": true,
+              "operands": [
+                5
+              ],
+              "type": "float4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": 7,
+      "type": "float4",
+      "kind": "Parameter",
+      "name": "a",
+      "semantic": "COLOR0"
+    },
+    {
+      "id": 12,
+      "type": "float4",
+      "kind": "Parameter",
+      "name": "b",
+      "semantic": "COLOR1"
+    },
+    {
+      "id": 17,
+      "type": "uint",
+      "kind": "Parameter",
+      "name": "i",
+      "semantic": "TEXCOORD0"
+    },
+    {
+      "id": 31,
+      "type": "bool",
+      "kind": "LocalVariable",
+      "name": "keepGoing"
+    },
+    {
+      "id": 1,
+      "type": "bool",
+      "kind": "Temp"
+    },
+    {
+      "id": 23,
+      "type": "float4",
+      "kind": "LocalVariable",
+      "name": "acc"
+    },
+    {
+      "id": 2,
+      "type": "float4",
+      "kind": "Temp"
+    },
+    {
+      "id": 3,
+      "type": "int",
+      "kind": "Constant",
+      "name": "literal"
+    },
+    {
+      "id": 4,
+      "type": "uint",
+      "kind": "Temp"
+    },
+    {
+      "id": 5,
+      "type": "float4",
+      "kind": "Temp"
+    }
+  ],
+  "resources": [],
+  "techniques": [],
+  "diagnostics": [
+    {
+      "message": "constfold executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "algebraic executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "copyprop executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "cse executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "dce executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "component-dce executed",
+      "severity": "Info",
+      "stage": "optimize"
+    }
+  ]
+}

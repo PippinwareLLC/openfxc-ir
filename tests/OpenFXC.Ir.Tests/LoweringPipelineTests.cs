@@ -72,6 +72,40 @@ public class LoweringPipelineTests
     }
 
     [Fact]
+    public void Lower_Sm11_Profile_LowersBasicShader()
+    {
+        const string hlsl = "float4 main(float2 uv : TEXCOORD0) : COLOR { return float4(uv, 0, 1); }";
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("sm1.fx", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("ps_1_1", "main", astJson).Analyze();
+        var semanticJson = JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var pipeline = new LoweringPipeline();
+        var module = pipeline.Lower(new LoweringRequest(semanticJson, null, "main"));
+
+        Assert.Equal("ps_1_1", module.Profile);
+        Assert.Equal("Pixel", module.EntryPoint?.Stage);
+        Assert.DoesNotContain(module.Diagnostics, d => string.Equals(d.Severity, "Error", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(module.Functions.Single().Blocks.SelectMany(b => b.Instructions), i => i.Op == "Return");
+    }
+
+    [Fact]
     public void Lower_Throws_OnInvalidJson()
     {
         var pipeline = new LoweringPipeline();
@@ -122,6 +156,46 @@ public class LoweringPipelineTests
     }
 
     [Fact]
+    public void Lower_ExtendedIntrinsics_AreRecognized()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForExtendedIntrinsics();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        Assert.Contains(block.Instructions, i => i.Op == "Transpose");
+        Assert.Contains(block.Instructions, i => i.Op == "Determinant");
+        Assert.Contains(block.Instructions, i => i.Op == "AsUint");
+        Assert.Contains(block.Instructions, i => i.Op == "AsFloat");
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
+    }
+
+    [Fact]
+    public void Lower_BroaderIntrinsics_AreRecognized()
+    {
+        var resolve = typeof(LoweringPipeline)
+            .GetMethod("ResolveIntrinsicByName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(resolve);
+
+        var expectations = new Dictionary<string, string>
+        {
+            ["noise"] = "Noise",
+            ["pack"] = "Pack",
+            ["unpack"] = "Unpack",
+            ["saturate"] = "Saturate"
+        };
+
+        foreach (var (name, expected) in expectations)
+        {
+            var op = resolve!.Invoke(null, new object?[] { name }) as string;
+            Assert.Equal(expected, op);
+        }
+    }
+
+    [Fact]
     public void Lower_StructuredBufferIndex_LoadsElement()
     {
         var pipeline = new LoweringPipeline();
@@ -133,6 +207,20 @@ public class LoweringPipelineTests
         var block = Assert.Single(func.Blocks);
         Assert.Contains(block.Instructions, i => i.Op == "Index");
         Assert.True(block.Instructions.Last().Terminator);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
+    }
+
+    [Fact]
+    public void Lower_StructuredBufferStore_EmitsIndexedStore()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForStructuredBufferStore();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        var func = Assert.Single(result.Functions);
+        var block = Assert.Single(func.Blocks);
+        Assert.Contains(block.Instructions, i => i.Op == "Store" && i.Operands.Count == 3 && i.Tag == "indexed");
         Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Error");
     }
 
@@ -179,6 +267,7 @@ public class LoweringPipelineTests
         Assert.Contains(func.Blocks, b => b.Id.Contains("if", StringComparison.OrdinalIgnoreCase) || b.Instructions.Any(i => i.Op == "BranchCond" && (i.Tag?.Contains("then:") ?? false)));
         Assert.True(func.Blocks.Any(b => b.Instructions.Any(i => i.Op == "BranchCond")), "Expected at least one conditional branch.");
     }
+
 
     private static string BuildSemanticJsonFromHlsl()
     {
@@ -249,6 +338,7 @@ public class LoweringPipelineTests
         });
     }
 
+
     private static string BuildSemanticJsonForUnsupportedIntrinsic()
     {
         var hlsl = """
@@ -273,7 +363,7 @@ public class LoweringPipelineTests
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         });
 
-        var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
+        var semantic = new SemanticAnalyzer("ps_5_0", "main", astJson).Analyze();
         if (semantic.Syntax?.Nodes is { } nodes)
         {
             var callNode = nodes.FirstOrDefault(n => string.Equals(n.Kind, "CallExpression", StringComparison.OrdinalIgnoreCase));
@@ -441,6 +531,41 @@ public class LoweringPipelineTests
         });
     }
 
+    private static string BuildSemanticJsonForStructuredBufferStore()
+    {
+        var hlsl = """
+        StructuredBuffer<float4> Input : register(t0);
+        RWStructuredBuffer<float4> Output : register(u0);
+
+        void main(uint idx : SV_DispatchThreadID)
+        {
+            Output[idx] = Input[idx];
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("structured_store.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("cs_5_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
     private static string BuildSemanticJsonForPow()
     {
         var hlsl = """
@@ -466,6 +591,38 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("ps_2_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForExtendedIntrinsics()
+    {
+        var hlsl = """
+        float4 main(float3x3 m : TEXCOORD0, float3 dir : TEXCOORD1) : SV_Target
+        {
+            return float4(mul(dir, transpose(m)), asfloat(asuint(determinant(m))));
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("intrinsics.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {

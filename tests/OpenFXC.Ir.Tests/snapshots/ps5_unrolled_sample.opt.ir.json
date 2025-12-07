@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "profile": "ps_2_0",
+  "profile": "ps_5_0",
   "entryPoint": {
     "function": "main",
     "stage": "Pixel"
@@ -10,7 +10,7 @@
       "name": "main",
       "returnType": "float4",
       "parameters": [
-        10
+        13
       ],
       "blocks": [
         {
@@ -21,26 +21,66 @@
               "terminator": false,
               "result": 1,
               "operands": [
-                16
+                24
               ],
-              "type": "float2"
+              "type": "float4"
             },
             {
-              "op": "Sample",
+              "op": "Load",
               "terminator": false,
               "result": 2,
               "operands": [
+                37
+              ],
+              "type": "float"
+            },
+            {
+              "op": "Swizzle",
+              "terminator": false,
+              "result": 3,
+              "operands": [
+                2
+              ],
+              "type": "float3",
+              "tag": "xxx"
+            },
+            {
+              "op": "Call",
+              "terminator": false,
+              "result": 5,
+              "operands": [
                 3,
-                1
+                4
               ],
               "type": "float4",
-              "tag": "tex2D"
+              "tag": "float4"
+            },
+            {
+              "op": "Load",
+              "terminator": false,
+              "result": 7,
+              "operands": [
+                37
+              ],
+              "type": "float"
+            },
+            {
+              "op": "Lerp",
+              "terminator": false,
+              "result": 8,
+              "operands": [
+                1,
+                5,
+                7
+              ],
+              "type": "float4",
+              "tag": "lerp"
             },
             {
               "op": "Return",
               "terminator": true,
               "operands": [
-                2
+                8
               ],
               "type": "float4"
             }
@@ -51,40 +91,72 @@
   ],
   "values": [
     {
-      "id": 3,
-      "type": "sampler2D",
+      "id": 6,
+      "type": "SamplerState",
       "kind": "Sampler",
-      "name": "S"
+      "name": "Samp"
     },
     {
-      "id": 10,
+      "id": 13,
       "type": "float2",
       "kind": "Parameter",
       "name": "uv",
       "semantic": "TEXCOORD0"
     },
     {
-      "id": 16,
-      "type": "float2",
+      "id": 24,
+      "type": "float4",
       "kind": "LocalVariable",
-      "name": "uv2"
+      "name": "color"
     },
     {
       "id": 1,
-      "type": "float2",
+      "type": "float4",
       "kind": "Temp"
     },
     {
+      "id": 37,
+      "type": "float",
+      "kind": "LocalVariable",
+      "name": "weight"
+    },
+    {
       "id": 2,
+      "type": "float",
+      "kind": "Temp"
+    },
+    {
+      "id": 3,
+      "type": "float3",
+      "kind": "Temp"
+    },
+    {
+      "id": 4,
+      "type": "float",
+      "kind": "Constant",
+      "name": "literal"
+    },
+    {
+      "id": 5,
+      "type": "float4",
+      "kind": "Temp"
+    },
+    {
+      "id": 7,
+      "type": "float",
+      "kind": "Temp"
+    },
+    {
+      "id": 8,
       "type": "float4",
       "kind": "Temp"
     }
   ],
   "resources": [
     {
-      "name": "S",
+      "name": "Samp",
       "kind": "Sampler",
-      "type": "sampler2D"
+      "type": "SamplerState"
     }
   ],
   "techniques": [],
