@@ -22,8 +22,8 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 | Profile band | Lower | Optimize | Notes |
 | --- | --- | --- | --- |
 | SM1.x (vs_1_1/ps_1_1) | Planned | Planned | Depends on `openfxc-sem`; expect diagnostics for unsupported legacy intrinsics. |
-| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`). | **Alpha**: generic constfold/algebraic/copyprop/DCE; `component-dce` placeholder. | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
-| SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Experimental**: arithmetic/control flow lower; resource loads emit diagnostics for unsupported cases (cbuffer fields, structured buffers). | **Experimental**: optimize passes run on math/flow only; resource gaps remain. | Snapshots capture current diagnostics (`sm4_cbuffer`, `sm5_structured`). |
+| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`, normalize/dot/etc.). | **Alpha**: constfold/algebraic/copyprop/DCE; `component-dce` placeholder. | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
+| SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Experimental**: arithmetic/control flow lower; resource loads partly handled (structured buffer indexing now supported; cbuffer field binding gaps remain). | **Experimental**: optimize passes run on math/flow only; resource gaps remain. | Snapshots capture current status (`sm4_cbuffer` still diagnostic; `sm5_structured` succeeds). |
 | FX (techniques/passes) | **Minimal**: entry lowering works when present; technique metadata not yet projected into IR. | **Passthrough**: optimize ignores FX metadata; runs generic passes on IR. | Snapshot `fx_basic` covers entry path. |
 
 ## IR schema (formatVersion 1)
