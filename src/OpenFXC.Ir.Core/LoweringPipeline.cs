@@ -573,6 +573,45 @@ public sealed class LoweringPipeline
             return resultId;
         }
 
+        if (string.Equals(node.Kind, "AssignmentExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            var leftChild = GetChildByRoles(node, "left", "target", "lhs");
+            var rightChild = GetChildByRoles(node, "right", "rhs", "value");
+            var leftNodeId = leftChild?.NodeId;
+            var leftNode = leftNodeId is int lId && nodes.TryGetValue(lId, out var ln) ? ln : null;
+            if (leftNode is null)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Assignment missing left-hand side at node {node.Id}.", "lower"));
+                return null;
+            }
+
+            var targetSymbol = ResolveSymbolFromNode(leftNode, leftNodeId, typeByNode, symbols);
+            if (targetSymbol is null || !ShouldStore(targetSymbol.Kind))
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Unsupported assignment target at node {node.Id}.", "lower"));
+                return null;
+            }
+
+            var rhsId = rightChild?.NodeId is int rId
+                ? LowerExpression(rId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                : null;
+            if (rhsId is null)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Failed to lower assignment RHS for {node.Id}.", "lower"));
+                return null;
+            }
+
+            var baseVal = EnsureValue(targetSymbol, values, valueBySymbol, defaultKind: targetSymbol.Kind ?? "Resource");
+            instructions.Add(new IrInstruction
+            {
+                Op = "Store",
+                Operands = baseVal is null ? new[] { rhsId.Value } : new[] { baseVal.Id, rhsId.Value },
+                Type = typeByNode.TryGetValue(nodeId, out var at) ? at : targetSymbol.Type ?? "unknown"
+            });
+
+            return rhsId;
+        }
+
         diagnostics.Add(IrDiagnostic.Error($"Unsupported expression kind '{node.Kind}'.", "lower"));
         return null;
     }
