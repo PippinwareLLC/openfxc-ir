@@ -21,10 +21,10 @@ Lower the semantic model from `openfxc-sem` into a backend-agnostic IR (formatVe
 ## Compatibility matrix (current)
 | Profile band | Lower | Optimize | Notes |
 | --- | --- | --- | --- |
-| SM1.x (vs_1_1/ps_1_1) | **Alpha**: baseline ps_1_1 lowering validated; legacy intrinsic coverage still limited. | Planned | Depends on `openfxc-sem`; expect diagnostics for unsupported legacy intrinsics. |
-| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Alpha**: functions/params, resources (`Sample`), swizzles, if/else/loops, common intrinsics (`mul`, `tex*`, normalize/dot/etc.). | **Alpha**: constfold/algebraic/copyprop/DCE; component-DCE implemented. | Snapshot coverage in tests (`ps_texture`, `ps_sm3_texproj`). |
-| SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Experimental**: arithmetic/control flow lower; resource loads partly handled (structured buffer indexing now supported; cbuffer field binding gaps remain). | **Experimental**: optimize passes run on math/flow only; resource gaps remain. | Snapshots capture current status (`sm4_cbuffer` still diagnostic; `sm5_structured` succeeds). |
-| FX (techniques/passes) | **Minimal**: entry lowering works when present; technique metadata not yet projected into IR. | **Passthrough**: optimize ignores FX metadata; runs generic passes on IR. | Snapshot `fx_basic` covers entry path. |
+| SM1.x (vs_1_1/ps_1_1) | **Supported**: baseline ps_1_1 lowering validated across corpus; legacy intrinsic coverage widened. | **Supported**: constfold/algebraic/copyprop/DCE/component-DCE applied. | DXSDK corpus green. |
+| SM2.x-SM3.x (vs_2_0/ps_2_0/ps_3_0) | **Supported**: functions/params/resources (Sample/Load/Store), swizzles, if/else/loops, intrinsics (`mul`, `tex*`, dot/normalize/etc.), int/uint/half promotion. | **Supported**: full pass pipeline (constfold, algebraic, copyprop, DCE, component-DCE). | Snapshots (`ps_texture`, `ps_sm3_texproj`) plus full DXSDK sweep. |
+| SM4.x-SM5.x (vs_4_0/ps_4_0/vs_5_0/ps_5_0/cs_5_0) | **Supported**: arithmetic/control flow, structured buffer indexing, cbuffer/struct field loads, RW/structured writes, return widening. | **Supported**: same pass pipeline; honors resource side-effects. | Snapshots (`sm4_cbuffer`, `sm5_structured`) and DXSDK corpus pass. |
+| FX (techniques/passes) | **Supported**: techniques/passes projected into IR metadata; entry lowering uses FX bindings. | **Supported**: optimize runs on IR while preserving FX metadata. | Snapshot `fx_basic`; full corpus sweep green. |
 
 ## IR schema (formatVersion 1)
 - `profile`, `entryPoint` (function/stage), `functions` (name/returnType/parameters/blocks), `blocks` (id/instructions with `op`/`operands`/`result`/`terminator`/`type`/`tag`), `values` (id/kind/type/name/semantic), `resources` (name/kind/type), `diagnostics` (severity/message/stage).
