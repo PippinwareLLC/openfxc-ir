@@ -12,9 +12,6 @@ Purpose: Lower the semantic model from `openfxc-sem` into a backend-agnostic IR 
 - Output: optimized IR JSON, preserving invariants and backend agnosticism.
 - CLI goal: `openfxc-ir optimize --passes constfold,dce,component-dce,copyprop,algebraic < input.ir.json > output.ir.opt.json`.
 
-## Origin
-openfxc-ir is a distilled standalone CLI tool peeled from the larger (currently private) OpenFXC project.
-
 ## Key principles
 - Backend-agnostic: no DXBC opcodes/registers/containers.
 - SSA-ish, typed IR with explicit control flow and resource operations.
@@ -32,8 +29,8 @@ Target coverage by shader-model era/features (bootstrap status: planned unless n
 
 ## Quickstart
 - Build: `dotnet build openfxc-ir.sln`
-- Lower (M0 skeleton): `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile vs_4_0 | openfxc-ir lower > foo.ir.json` (emits stub IR with a diagnostic until lowering is implemented)
-- Optimize: `openfxc-ir optimize` (pipeline scaffolding pending)
+- Lower (skeleton): `openfxc-hlsl parse foo.hlsl | openfxc-sem analyze --profile vs_4_0 | openfxc-ir lower > foo.ir.json`
+- Optimize: `openfxc-ir optimize` (pipeline wiring pending)
 
 ## Docs
 - Design: `docs/DESIGN.md`

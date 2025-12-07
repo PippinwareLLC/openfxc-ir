@@ -247,6 +247,11 @@ public sealed class LoweringPipeline
                 var symbol = symbols.FirstOrDefault(s => s.Id == symId);
                 if (symbol is not null)
                 {
+                    if (ShouldLoad(symbol.Kind))
+                    {
+                        return EmitLoad(symbol, nodeId, typeByNode, values, valueBySymbol, usedIds, instructions);
+                    }
+
                     return EnsureValue(symbol, values, valueBySymbol)?.Id;
                 }
             }
@@ -262,6 +267,11 @@ public sealed class LoweringPipeline
                 var symbol = symbols.FirstOrDefault(s => s.Id == memberSymId);
                 if (symbol is not null)
                 {
+                    if (ShouldLoad(symbol.Kind))
+                    {
+                        return EmitLoad(symbol, nodeId, typeByNode, values, valueBySymbol, usedIds, instructions, node.Swizzle);
+                    }
+
                     return EnsureValue(symbol, values, valueBySymbol)?.Id;
                 }
             }
@@ -548,6 +558,39 @@ public sealed class LoweringPipeline
         return child.NodeId;
     }
 
+    private static bool ShouldLoad(string? symbolKind)
+    {
+        if (symbolKind is null) return false;
+        return symbolKind.Equals("GlobalVariable", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("CBuffer", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("Buffer", StringComparison.OrdinalIgnoreCase)
+               || symbolKind.Equals("StructMember", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int EmitLoad(SymbolInfo symbol, int nodeId, Dictionary<int, string> typeByNode, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, string? tag = null)
+    {
+        var baseVal = EnsureValue(symbol, values, valueBySymbol, defaultKind: symbol.Kind ?? "Resource");
+        var resultId = AllocateId(null, usedIds);
+        var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : symbol.Type ?? "unknown";
+        values.Add(new IrValue
+        {
+            Id = resultId,
+            Kind = "Temp",
+            Type = resultType
+        });
+
+        instructions.Add(new IrInstruction
+        {
+            Op = "Load",
+            Result = resultId,
+            Operands = baseVal is null ? Array.Empty<int>() : new[] { baseVal.Id },
+            Type = resultType,
+            Tag = tag
+        });
+
+        return resultId;
+    }
+
     private static IrBlock[] LowerFunctionBody(SyntaxNodeInfo? functionNode, SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, Dictionary<int, string> typeByNode, HashSet<int> usedIds, int? firstParameterId, List<IrDiagnostic> diagnostics)
     {
         var nodeById = BuildSyntaxLookup(semantic.Syntax);
@@ -692,6 +735,103 @@ public sealed class LoweringPipeline
                 if (bodyId is int bStmtId)
                 {
                     LowerEmbeddedStatement(bStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                }
+                if (!currentInstructions.Any(i => i.Terminator))
+                {
+                    currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = condLabel });
+                }
+                FinishBlock();
+
+                StartBlock(exitLabel);
+                continue;
+            }
+
+            if (string.Equals(stmtNode.Kind, "DoWhileStatement", StringComparison.OrdinalIgnoreCase))
+            {
+                var bodyLabel = NewLabel("do.body");
+                var condLabel = NewLabel("do.cond");
+                var exitLabel = NewLabel("do.exit");
+
+                currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = bodyLabel });
+                FinishBlock();
+
+                StartBlock(bodyLabel);
+                var bodyId = GetChildNodeId(stmtNode, "body");
+                if (bodyId is int bStmtId)
+                {
+                    LowerEmbeddedStatement(bStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                }
+                if (!currentInstructions.Any(i => i.Terminator))
+                {
+                    currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = condLabel });
+                }
+                FinishBlock();
+
+                StartBlock(condLabel);
+                var condId = GetChildNodeId(stmtNode, "condition");
+                var condValue = condId is int cId
+                    ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
+                    : null;
+                currentInstructions.Add(new IrInstruction
+                {
+                    Op = "BranchCond",
+                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Terminator = true,
+                    Tag = $"then:{bodyLabel};else:{exitLabel}"
+                });
+                FinishBlock();
+
+                StartBlock(exitLabel);
+                continue;
+            }
+
+            if (string.Equals(stmtNode.Kind, "ForStatement", StringComparison.OrdinalIgnoreCase))
+            {
+                var initId = GetChildNodeId(stmtNode, "initializer");
+                if (initId is int initStmtId)
+                {
+                    LowerEmbeddedStatement(initStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                }
+
+                var condLabel = NewLabel("for.cond");
+                var bodyLabel = NewLabel("for.body");
+                var incrLabel = NewLabel("for.incr");
+                var exitLabel = NewLabel("for.exit");
+
+                currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = condLabel });
+                FinishBlock();
+
+                StartBlock(condLabel);
+                var condId = GetChildNodeId(stmtNode, "condition");
+                var condValue = condId is int cId
+                    ? LowerExpression(cId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics)
+                    : null;
+                currentInstructions.Add(new IrInstruction
+                {
+                    Op = "BranchCond",
+                    Operands = condValue is null ? Array.Empty<int>() : new[] { condValue.Value },
+                    Terminator = true,
+                    Tag = $"then:{bodyLabel};else:{exitLabel}"
+                });
+                FinishBlock();
+
+                StartBlock(bodyLabel);
+                var bodyId = GetChildNodeId(stmtNode, "body");
+                if (bodyId is int bodyStmtId)
+                {
+                    LowerEmbeddedStatement(bodyStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
+                }
+                if (!currentInstructions.Any(i => i.Terminator))
+                {
+                    currentInstructions.Add(new IrInstruction { Op = "Branch", Terminator = true, Tag = incrLabel });
+                }
+                FinishBlock();
+
+                StartBlock(incrLabel);
+                var incrId = GetChildNodeId(stmtNode, "increment");
+                if (incrId is int incStmtId)
+                {
+                    LowerEmbeddedStatement(incStmtId, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, currentInstructions, diagnostics, entrySymbol);
                 }
                 if (!currentInstructions.Any(i => i.Terminator))
                 {
