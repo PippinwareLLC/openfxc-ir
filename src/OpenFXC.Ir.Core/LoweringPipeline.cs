@@ -32,11 +32,13 @@ public sealed class LoweringPipeline
         var values = new List<IrValue>();
         var resources = new List<IrResource>();
         var functions = new List<IrFunction>();
+        var valueBySymbol = new Dictionary<int, IrValue>();
 
         if (entrySymbol is not null)
         {
-            resources.AddRange(LowerResources(semantic));
-            var function = LowerFunction(entrySymbol, semantic, values);
+            LowerResources(semantic, resources, values, valueBySymbol);
+            LowerParameters(entrySymbol, semantic, values, valueBySymbol);
+            var function = LowerFunction(entrySymbol, semantic, values, valueBySymbol, diagnostics);
             functions.Add(function);
         }
         else if (entry is not null && entry.SymbolId is null)
@@ -113,43 +115,59 @@ public sealed class LoweringPipeline
         return semantic.Symbols.FirstOrDefault(s => s.Id == entry.SymbolId);
     }
 
-    private static IrFunction LowerFunction(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values)
+    private static void LowerParameters(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol)
     {
-        var usedIds = new HashSet<int>();
-        var parameters = new List<int>();
-        int? firstParameterId = null;
-
         foreach (var parameter in semantic.Symbols.Where(s =>
                      string.Equals(s.Kind, "Parameter", StringComparison.OrdinalIgnoreCase) &&
                      s.ParentSymbolId == entrySymbol.Id))
         {
-            var id = AllocateId(parameter.Id, usedIds);
-            var value = new IrValue
+            EnsureValue(parameter, values, valueBySymbol, defaultKind: "Parameter");
+        }
+    }
+
+    private static IrFunction LowerFunction(SymbolInfo entrySymbol, SemanticOutput semantic, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, List<IrDiagnostic> diagnostics)
+    {
+        var usedIds = new HashSet<int>(values.Select(v => v.Id));
+        var parameters = values.Where(v => string.Equals(v.Kind, "Parameter", StringComparison.OrdinalIgnoreCase)).Select(v => v.Id).ToList();
+        int? firstParameterId = parameters.FirstOrDefault();
+
+        var typeByNode = semantic.Types
+            .Where(t => t.NodeId is not null && !string.IsNullOrWhiteSpace(t.Type))
+            .ToDictionary(t => t.NodeId!.Value, t => t.Type!);
+
+        var nodeById = BuildSyntaxLookup(semantic.Syntax);
+        var functionNode = entrySymbol.DeclNodeId is int declId && nodeById.TryGetValue(declId, out var fnNode) ? fnNode : null;
+
+        var instructions = new List<IrInstruction>();
+        int? returnValueId = null;
+        string returnType = ParseReturnType(entrySymbol.Type);
+
+        if (functionNode is not null)
+        {
+            var returnExprId = FindReturnExpression(nodeById, functionNode.Id ?? -1);
+            if (returnExprId is not null)
             {
-                Id = id,
-                Kind = "Parameter",
-                Type = parameter.Type ?? "unknown",
-                Name = parameter.Name,
-                Semantic = FormatSemantic(parameter.Semantic)
-            };
-            values.Add(value);
-            parameters.Add(id);
-            firstParameterId ??= id;
+                returnValueId = LowerExpression(returnExprId.Value, nodeById, typeByNode, semantic.Symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+                if (returnValueId is null && !IsVoid(returnType))
+                {
+                    diagnostics.Add(IrDiagnostic.Error("Failed to lower return expression.", "lower"));
+                }
+            }
         }
 
-        var returnType = ParseReturnType(entrySymbol.Type);
         int? returnUndefId = null;
-        var returnOperand = firstParameterId;
+        var returnOperand = returnValueId ?? firstParameterId;
         if (!IsVoid(returnType) && returnOperand is null)
         {
             returnUndefId = AllocateId(null, usedIds);
-            values.Add(new IrValue
+            var undef = new IrValue
             {
                 Id = returnUndefId.Value,
                 Kind = "Undef",
                 Type = returnType,
                 Name = "undef_return"
-            });
+            };
+            values.Add(undef);
             returnOperand = returnUndefId;
         }
 
@@ -161,10 +179,12 @@ public sealed class LoweringPipeline
             Terminator = true
         };
 
+        instructions.Add(returnInstruction);
+
         var block = new IrBlock
         {
             Id = "entry",
-            Instructions = new[] { returnInstruction }
+            Instructions = instructions
         };
 
         return new IrFunction
@@ -205,9 +225,8 @@ public sealed class LoweringPipeline
         return id;
     }
 
-    private static IReadOnlyList<IrResource> LowerResources(SemanticOutput semantic)
+    private static void LowerResources(SemanticOutput semantic, List<IrResource> resources, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol)
     {
-        var resources = new List<IrResource>();
         foreach (var symbol in semantic.Symbols)
         {
             if (!IsResourceKind(symbol.Kind))
@@ -221,9 +240,9 @@ public sealed class LoweringPipeline
                 Kind = symbol.Kind ?? string.Empty,
                 Type = symbol.Type ?? "unknown"
             });
-        }
 
-        return resources;
+            EnsureValue(symbol, values, valueBySymbol, defaultKind: symbol.Kind ?? "Resource");
+        }
     }
 
     private static bool IsResourceKind(string? kind)
@@ -244,5 +263,139 @@ public sealed class LoweringPipeline
     {
         if (semantic is null) return null;
         return $"{semantic.Name}{semantic.Index ?? 0}";
+    }
+
+    private static Dictionary<int, SyntaxNodeInfo> BuildSyntaxLookup(SyntaxInfo? syntax)
+    {
+        var map = new Dictionary<int, SyntaxNodeInfo>();
+        if (syntax?.Nodes is null) return map;
+        foreach (var node in syntax.Nodes)
+        {
+            if (node.Id is int id)
+            {
+                map[id] = node;
+            }
+        }
+        return map;
+    }
+
+    private static int? FindReturnExpression(Dictionary<int, SyntaxNodeInfo> nodes, int rootId)
+    {
+        if (!nodes.TryGetValue(rootId, out var node)) return null;
+        if (string.Equals(node.Kind, "ReturnStatement", StringComparison.OrdinalIgnoreCase))
+        {
+            var exprChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "expression", StringComparison.OrdinalIgnoreCase));
+            if (exprChild.NodeId is int exprId)
+            {
+                return exprId;
+            }
+            return null;
+        }
+
+        foreach (var child in node.Children)
+        {
+            if (child.NodeId is int childId)
+            {
+                var found = FindReturnExpression(nodes, childId);
+                if (found is not null) return found;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? LowerExpression(int nodeId, Dictionary<int, SyntaxNodeInfo> nodes, Dictionary<int, string> typeByNode, IReadOnlyList<SymbolInfo> symbols, List<IrValue> values, Dictionary<int, IrValue> valueBySymbol, HashSet<int> usedIds, List<IrInstruction> instructions, List<IrDiagnostic> diagnostics)
+    {
+        if (!nodes.TryGetValue(nodeId, out var node))
+        {
+            diagnostics.Add(IrDiagnostic.Error($"Syntax node {nodeId} not found.", "lower"));
+            return null;
+        }
+
+        if (string.Equals(node.Kind, "Identifier", StringComparison.OrdinalIgnoreCase))
+        {
+            if (node.ReferencedSymbolId is int symId)
+            {
+                var symbol = symbols.FirstOrDefault(s => s.Id == symId);
+                if (symbol is not null)
+                {
+                    return EnsureValue(symbol, values, valueBySymbol)?.Id;
+                }
+            }
+
+            diagnostics.Add(IrDiagnostic.Error($"Identifier node {node.Id} missing referenced symbol.", "lower"));
+            return null;
+        }
+
+        if (string.Equals(node.Kind, "CallExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            var argIds = new List<int>();
+            string? calleeTag = null;
+            var calleeChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "callee", StringComparison.OrdinalIgnoreCase));
+            if (calleeChild.NodeId is int cId && nodes.TryGetValue(cId, out var calleeNode) && calleeNode.ReferencedSymbolId is int calleeSymId)
+            {
+                var calleeSym = symbols.FirstOrDefault(s => s.Id == calleeSymId);
+                calleeTag = calleeSym?.Name;
+            }
+
+            foreach (var child in node.Children.Where(c => string.Equals(c.Role, "argument", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (child.NodeId is not int argNodeId) continue;
+                var lowered = LowerExpression(argNodeId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+                if (lowered is not null)
+                {
+                    argIds.Add(lowered.Value);
+                }
+            }
+
+            var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
+            var resultId = AllocateId(null, usedIds);
+            var resultValue = new IrValue
+            {
+                Id = resultId,
+                Kind = "Temp",
+                Type = resultType
+            };
+            values.Add(resultValue);
+            instructions.Add(new IrInstruction
+            {
+                Op = "Call",
+                Result = resultId,
+                Operands = argIds,
+                Type = resultType,
+                Tag = calleeTag
+            });
+
+            return resultId;
+        }
+
+        diagnostics.Add(IrDiagnostic.Error($"Unsupported expression kind '{node.Kind}'.", "lower"));
+        return null;
+    }
+
+    private static IrValue? EnsureValue(SymbolInfo symbol, List<IrValue>? values, Dictionary<int, IrValue> valueBySymbol, string? defaultKind = null)
+    {
+        if (symbol.Id is not int id)
+        {
+            return null;
+        }
+
+        if (valueBySymbol.TryGetValue(id, out var existing))
+        {
+            return existing;
+        }
+
+        var value = new IrValue
+        {
+            Id = id,
+            Kind = defaultKind ?? symbol.Kind ?? "Temp",
+            Type = symbol.Type ?? "unknown",
+            Name = symbol.Name,
+            Semantic = FormatSemantic(symbol.Semantic)
+        };
+
+        valueBySymbol[id] = value;
+        values?.Add(value);
+        return value;
     }
 }

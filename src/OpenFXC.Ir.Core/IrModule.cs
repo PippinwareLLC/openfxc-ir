@@ -75,6 +75,9 @@ public sealed record IrInstruction
 
     [JsonPropertyName("terminator")]
     public bool Terminator { get; init; }
+
+    [JsonPropertyName("tag")]
+    public string? Tag { get; init; }
 }
 
 public sealed record IrResource

@@ -37,10 +37,15 @@ public class LoweringPipelineTests
         Assert.DoesNotContain(result.Values, v => v.Kind == "Undef");
         var func = Assert.Single(result.Functions);
         var block = Assert.Single(func.Blocks);
-        var ret = Assert.Single(block.Instructions);
+        Assert.Equal(2, block.Instructions.Count);
+        var call = block.Instructions[0];
+        Assert.Equal("Call", call.Op);
+        Assert.False(call.Terminator);
+        Assert.NotNull(call.Result);
+        var ret = block.Instructions[1];
         Assert.True(ret.Terminator);
         Assert.Equal("Return", ret.Op);
-        Assert.Equal(func.Parameters.Single(), ret.Operands.Single());
+        Assert.Equal(call.Result, ret.Operands.Single());
     }
 
     [Fact]
