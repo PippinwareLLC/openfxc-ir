@@ -338,6 +338,37 @@ public sealed class LoweringPipeline
                 }
             }
 
+            var exprChildId = GetChildNodeId(node, "expression");
+            if (exprChildId is int swizzleSourceId)
+            {
+                var sourceId = LowerExpression(swizzleSourceId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+                if (sourceId is null)
+                {
+                    diagnostics.Add(IrDiagnostic.Error($"Failed to lower swizzle source for node {node.Id}.", "lower"));
+                    return null;
+                }
+
+                var resultType = typeByNode.TryGetValue(nodeId, out var st) ? st : "unknown";
+                var resultId = AllocateId(null, usedIds);
+                values.Add(new IrValue
+                {
+                    Id = resultId,
+                    Kind = "Temp",
+                    Type = resultType
+                });
+
+                instructions.Add(new IrInstruction
+                {
+                    Op = "Swizzle",
+                    Result = resultId,
+                    Operands = new[] { sourceId.Value },
+                    Type = resultType,
+                    Tag = node.Swizzle
+                });
+
+                return resultId;
+            }
+
             diagnostics.Add(IrDiagnostic.Error($"Member access node {node.Id} missing referenced symbol.", "lower"));
             return null;
         }
@@ -346,12 +377,15 @@ public sealed class LoweringPipeline
         {
             var argIds = new List<int>();
             string? calleeTag = null;
+            string? calleeKind = null;
             var calleeChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "callee", StringComparison.OrdinalIgnoreCase));
             if (calleeChild.NodeId is int cId && nodes.TryGetValue(cId, out var calleeNode) && calleeNode.ReferencedSymbolId is int calleeSymId)
             {
                 var calleeSym = symbols.FirstOrDefault(s => s.Id == calleeSymId);
                 calleeTag = calleeSym?.Name;
             }
+            calleeTag ??= node.CalleeName;
+            calleeKind = node.CalleeKind;
 
             foreach (var child in node.Children.Where(c => string.Equals(c.Role, "argument", StringComparison.OrdinalIgnoreCase)))
             {
@@ -372,9 +406,12 @@ public sealed class LoweringPipeline
                 Type = resultType
             };
             values.Add(resultValue);
+
+            var opName = ResolveCallOp(calleeKind, calleeTag);
+
             instructions.Add(new IrInstruction
             {
-                Op = "Call",
+                Op = opName,
                 Result = resultId,
                 Operands = argIds,
                 Type = resultType,
@@ -412,7 +449,7 @@ public sealed class LoweringPipeline
 
             instructions.Add(new IrInstruction
             {
-                Op = "Binary",
+                Op = ResolveBinaryOp(node.Operator),
                 Result = resultId,
                 Operands = new[] { leftId.Value, rightId.Value },
                 Type = resultType
@@ -442,15 +479,54 @@ public sealed class LoweringPipeline
                 Type = resultType
             });
 
+            var opName = ResolveUnaryOp(node.Operator);
+            if (opName is null)
+            {
+                return operandId.Value;
+            }
+
             instructions.Add(new IrInstruction
             {
-                Op = "Unary",
+                Op = opName,
                 Result = resultId,
                 Operands = new[] { operandId.Value },
                 Type = resultType
             });
 
             return resultId;
+        }
+
+        if (string.Equals(node.Kind, "CastExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            var exprChildId = GetChildNodeId(node, "expression");
+            if (exprChildId is int castExprId)
+            {
+                var operandId = LowerExpression(castExprId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics);
+                if (operandId is null)
+                {
+                    diagnostics.Add(IrDiagnostic.Error($"Failed to lower cast expression {node.Id}.", "lower"));
+                    return null;
+                }
+
+                var resultType = typeByNode.TryGetValue(nodeId, out var t) ? t : "unknown";
+                var resultId = AllocateId(null, usedIds);
+                values.Add(new IrValue
+                {
+                    Id = resultId,
+                    Kind = "Temp",
+                    Type = resultType
+                });
+
+                instructions.Add(new IrInstruction
+                {
+                    Op = "Cast",
+                    Result = resultId,
+                    Operands = new[] { operandId.Value },
+                    Type = resultType
+                });
+
+                return resultId;
+            }
         }
 
         diagnostics.Add(IrDiagnostic.Error($"Unsupported expression kind '{node.Kind}'.", "lower"));
@@ -481,5 +557,57 @@ public sealed class LoweringPipeline
         valueBySymbol[id] = value;
         values?.Add(value);
         return value;
+    }
+
+    private static string ResolveCallOp(string? calleeKind, string? calleeName)
+    {
+        if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(calleeName, "mul", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Mul";
+            }
+        }
+
+        return "Call";
+    }
+
+    private static string ResolveBinaryOp(string? op)
+    {
+        return op switch
+        {
+            "+" => "Add",
+            "-" => "Sub",
+            "*" => "Mul",
+            "/" => "Div",
+            "%" => "Mod",
+            "==" => "Eq",
+            "!=" => "Ne",
+            "<" => "Lt",
+            "<=" => "Le",
+            ">" => "Gt",
+            ">=" => "Ge",
+            "&&" => "LogicalAnd",
+            "||" => "LogicalOr",
+            _ => "Binary"
+        };
+    }
+
+    private static string? ResolveUnaryOp(string? op)
+    {
+        return op switch
+        {
+            "-" => "Negate",
+            "!" => "Not",
+            "~" => "BitNot",
+            "+" => null,
+            _ => "Unary"
+        };
+    }
+
+    private static int? GetChildNodeId(SyntaxNodeInfo node, string role)
+    {
+        var child = node.Children.FirstOrDefault(c => string.Equals(c.Role, role, StringComparison.OrdinalIgnoreCase));
+        return child.NodeId;
     }
 }

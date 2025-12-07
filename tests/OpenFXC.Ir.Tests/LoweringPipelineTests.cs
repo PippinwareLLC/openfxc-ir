@@ -39,7 +39,7 @@ public class LoweringPipelineTests
         var block = Assert.Single(func.Blocks);
         Assert.Equal(2, block.Instructions.Count);
         var call = block.Instructions[0];
-        Assert.Equal("Call", call.Op);
+        Assert.Equal("Mul", call.Op);
         Assert.False(call.Terminator);
         Assert.NotNull(call.Result);
         var ret = block.Instructions[1];
