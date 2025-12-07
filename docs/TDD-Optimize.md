@@ -75,7 +75,7 @@ Add an invariant test suite to enforce these post-passes.
 
 ## 6. Test Strategy
 - Unit tests per pass using small IR snippets (hand-built or helper builders).
-- Snapshot tests for combined pipeline:
+- Snapshot tests for combined pipeline (lower -> optimize). Current corpus includes a texture sample shader (`ps_texture`) with default passes enabled; goldens live in `tests/OpenFXC.Ir.Tests/snapshots`.
   ```
   openfxc-hlsl parse shader.hlsl \
     | openfxc-sem analyze --profile ps_2_0 \
@@ -89,7 +89,7 @@ Add an invariant test suite to enforce these post-passes.
 ## 7. Definition of Done
 - CLI reads IR JSON, writes optimized IR JSON; `--passes` selects pipeline.
 - Passes implemented/tested: `constfold`, `dce`, `component-dce` (placeholder), `copyprop`, `algebraic`.
-- IR invariants preserved; no backend/profile leakage.
+- IR invariants preserved; no backend/profile leakage; diagnostics emitted when invariants fail.
 - End-to-end pipeline on a sample corpus succeeds without internal errors; expected instruction count reductions; behaviorally equivalent modulo allowed simplifications.
 
 ## 8. Project Structure

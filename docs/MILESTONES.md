@@ -37,10 +37,10 @@
   - [x] Copy propagation.
   - [x] Algebraic simplifications (`x+0`, `x*1`, `x*0`, etc.).
 
-- [ ] M8: Tests + invariants (optimize)
-  - [ ] Unit tests per pass.
-  - [ ] Snapshot tests for combined pipeline (lower -> optimize).
-  - [ ] Invariant tests post-optimize (SSA-ish, typed, CFG intact, no dangling refs).
+- [x] M8: Tests + invariants (optimize)
+  - [x] Unit tests per pass.
+  - [x] Snapshot tests for combined pipeline (lower -> optimize).
+  - [x] Invariant tests post-optimize (SSA-ish, typed, CFG intact, no dangling refs).
 
 - [ ] M9: Docs + polish (optimize)
   - [ ] Update README/TDD/CLI usage for optimize.

@@ -1,0 +1,103 @@
+{
+  "formatVersion": 1,
+  "profile": "ps_2_0",
+  "entryPoint": {
+    "function": "main",
+    "stage": "Pixel"
+  },
+  "functions": [
+    {
+      "name": "main",
+      "returnType": "float4",
+      "parameters": [
+        10
+      ],
+      "blocks": [
+        {
+          "id": "entry",
+          "instructions": [
+            {
+              "op": "Sample",
+              "terminator": false,
+              "result": 1,
+              "operands": [
+                3,
+                16
+              ],
+              "type": "float4",
+              "tag": "tex2D"
+            },
+            {
+              "op": "Return",
+              "terminator": true,
+              "operands": [
+                1
+              ],
+              "type": "float4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": 3,
+      "type": "sampler2D",
+      "kind": "Sampler",
+      "name": "S"
+    },
+    {
+      "id": 10,
+      "type": "float2",
+      "kind": "Parameter",
+      "name": "uv",
+      "semantic": "TEXCOORD0"
+    },
+    {
+      "id": 16,
+      "type": "float2",
+      "kind": "LocalVariable",
+      "name": "uv2"
+    },
+    {
+      "id": 1,
+      "type": "float4",
+      "kind": "Temp"
+    }
+  ],
+  "resources": [
+    {
+      "name": "S",
+      "kind": "Sampler",
+      "type": "sampler2D"
+    }
+  ],
+  "diagnostics": [
+    {
+      "message": "constfold executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "algebraic executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "copyprop executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "dce executed",
+      "severity": "Info",
+      "stage": "optimize"
+    },
+    {
+      "message": "component-dce executed (no-op placeholder)",
+      "severity": "Info",
+      "stage": "optimize"
+    }
+  ]
+}
