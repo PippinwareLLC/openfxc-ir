@@ -346,6 +346,10 @@ public sealed class LoweringPipeline
             values.Add(resultValue);
 
             var opName = ResolveCallOp(calleeKind, calleeTag);
+            if (string.Equals(calleeKind, "Intrinsic", StringComparison.OrdinalIgnoreCase) && string.Equals(opName, "Call", StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Intrinsic '{calleeTag ?? "unknown"}' not supported by IR lowering.", "lower"));
+            }
 
             instructions.Add(new IrInstruction
             {

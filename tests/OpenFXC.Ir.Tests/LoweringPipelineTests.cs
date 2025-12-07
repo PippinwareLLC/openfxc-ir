@@ -96,6 +96,17 @@ public class LoweringPipelineTests
         Assert.Equal("Return", block.Instructions[1].Op);
     }
 
+    [Fact]
+    public void Lower_UnsupportedIntrinsic_EmitsDiagnostic()
+    {
+        var pipeline = new LoweringPipeline();
+        var semanticJson = BuildSemanticJsonForIntrinsic();
+
+        var result = pipeline.Lower(new LoweringRequest(semanticJson, null, null));
+
+        Assert.Contains(result.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("Intrinsic", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string BuildSemanticJsonFromHlsl()
     {
         var hlsl = """
@@ -158,6 +169,38 @@ public class LoweringPipelineTests
         });
 
         var semantic = new SemanticAnalyzer("ps_2_0", "main", astJson).Analyze();
+
+        return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    private static string BuildSemanticJsonForIntrinsic()
+    {
+        var hlsl = """
+        float4 main(float4 pos : POSITION0) : POSITION
+        {
+            return normalize(pos);
+        }
+        """;
+
+        var (tokens, lexDiagnostics) = HlslLexer.Lex(hlsl);
+        var (root, parseDiagnostics) = Parser.Parse(tokens, hlsl.Length);
+
+        var parseResult = new ParseResult(
+            FormatVersion: 1,
+            Source: new SourceInfo("intrinsic.hlsl", hlsl.Length),
+            Root: root,
+            Tokens: tokens,
+            Diagnostics: lexDiagnostics.Concat(parseDiagnostics).ToArray());
+
+        var astJson = JsonSerializer.Serialize(parseResult, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+
+        var semantic = new SemanticAnalyzer("vs_2_0", "main", astJson).Analyze();
 
         return JsonSerializer.Serialize(semantic, new JsonSerializerOptions
         {

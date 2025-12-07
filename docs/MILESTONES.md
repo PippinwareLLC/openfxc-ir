@@ -13,9 +13,9 @@
   - [x] Resources: texture/sampler/cbuffer/global representation; `Sample` op.
   - [x] CFG: if/else and simple loop lowering.
 
-- [ ] M3: Diagnostics + robustness
-  - [ ] Unsupported intrinsic/entry/type mismatch diagnostics.
-  - [ ] Tolerate semantic diagnostics; partial IR with errors recorded.
+- [x] M3: Diagnostics + robustness
+  - [x] Unsupported intrinsic/entry/type mismatch diagnostics.
+  - [x] Tolerate semantic diagnostics; partial IR with errors recorded.
 
 - [ ] M4: Tests + snapshots (lower)
   - [ ] Unit tests for ops/CFG/resources.
