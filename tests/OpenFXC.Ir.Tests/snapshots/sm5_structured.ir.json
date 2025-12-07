@@ -17,6 +17,16 @@
           "id": "entry",
           "instructions": [
             {
+              "op": "Index",
+              "terminator": false,
+              "result": 1,
+              "operands": [
+                11,
+                26
+              ],
+              "type": "structuredbuffer"
+            },
+            {
               "op": "Return",
               "terminator": true,
               "operands": [
@@ -44,10 +54,16 @@
       "semantic": "SV_DISPATCHTHREADID0"
     },
     {
+      "id": 11,
+      "type": "StructuredBuffer",
+      "kind": "Resource",
+      "name": "Input",
+      "semantic": "REGISTER(T0)0"
+    },
+    {
       "id": 1,
-      "type": "float4",
-      "kind": "Undef",
-      "name": "undef_return"
+      "type": "structuredbuffer",
+      "kind": "Temp"
     }
   ],
   "resources": [
@@ -57,11 +73,5 @@
       "type": "unknown"
     }
   ],
-  "diagnostics": [
-    {
-      "message": "Unsupported expression kind \u0027IndexExpression\u0027.",
-      "severity": "Error",
-      "stage": "lower"
-    }
-  ]
+  "diagnostics": []
 }

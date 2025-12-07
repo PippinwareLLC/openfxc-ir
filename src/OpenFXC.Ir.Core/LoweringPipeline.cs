@@ -471,6 +471,43 @@ public sealed class LoweringPipeline
             }
         }
 
+        if (string.Equals(node.Kind, "IndexExpression", StringComparison.OrdinalIgnoreCase))
+        {
+            var targetId = GetChildNodeId(node, "expression");
+            var indexId = GetChildNodeId(node, "index");
+            var baseVal = targetId is int tId
+                ? LowerExpression(tId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                : null;
+            var idxVal = indexId is int iId
+                ? LowerExpression(iId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
+                : null;
+
+            if (baseVal is null || idxVal is null)
+            {
+                diagnostics.Add(IrDiagnostic.Error($"Failed to lower index expression {node.Id}.", "lower"));
+                return null;
+            }
+
+            var resultType = typeByNode.TryGetValue(nodeId, out var it) ? it : "unknown";
+            var resultId = AllocateId(null, usedIds);
+            values.Add(new IrValue
+            {
+                Id = resultId,
+                Kind = "Temp",
+                Type = resultType
+            });
+
+            instructions.Add(new IrInstruction
+            {
+                Op = "Index",
+                Result = resultId,
+                Operands = new[] { baseVal.Value, idxVal.Value },
+                Type = resultType
+            });
+
+            return resultId;
+        }
+
         diagnostics.Add(IrDiagnostic.Error($"Unsupported expression kind '{node.Kind}'.", "lower"));
         return null;
     }
