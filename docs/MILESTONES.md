@@ -7,11 +7,11 @@
   - [x] Define IR JSON (formatVersion 1): types, values, functions, blocks, instructions, resources.
   - [x] Invariant helpers (SSA-ish, typed, block termination).
 
-- [ ] M2: Core lowering
+- [x] M2: Core lowering
   - [x] Functions/params/returns lowered.
-  - [ ] Expressions: binary/unary/swizzle/call/intrinsics.
-  - [ ] Resources: texture/sampler/cbuffer/global representation; `Sample` op.
-  - [ ] CFG: if/else and simple loop lowering.
+  - [x] Expressions: binary/unary/swizzle/call/intrinsics.
+  - [x] Resources: texture/sampler/cbuffer/global representation; `Sample` op.
+  - [x] CFG: if/else and simple loop lowering.
 
 - [ ] M3: Diagnostics + robustness
   - [ ] Unsupported intrinsic/entry/type mismatch diagnostics.

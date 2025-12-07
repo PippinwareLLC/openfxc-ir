@@ -317,7 +317,7 @@ public sealed class LoweringPipeline
             string? calleeTag = null;
             string? calleeKind = null;
             var calleeChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "callee", StringComparison.OrdinalIgnoreCase));
-            if (calleeChild.NodeId is int cId && nodes.TryGetValue(cId, out var calleeNode) && calleeNode.ReferencedSymbolId is int calleeSymId)
+            if (calleeChild?.NodeId is int cId && nodes.TryGetValue(cId, out var calleeNode) && calleeNode.ReferencedSymbolId is int calleeSymId)
             {
                 var calleeSym = symbols.FirstOrDefault(s => s.Id == calleeSymId);
                 calleeTag = calleeSym?.Name;
@@ -363,10 +363,10 @@ public sealed class LoweringPipeline
         {
             var leftChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "left", StringComparison.OrdinalIgnoreCase));
             var rightChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "right", StringComparison.OrdinalIgnoreCase));
-            var leftId = leftChild.NodeId is int lId
+            var leftId = leftChild?.NodeId is int lId
                 ? LowerExpression(lId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
                 : null;
-            var rightId = rightChild.NodeId is int rId
+            var rightId = rightChild?.NodeId is int rId
                 ? LowerExpression(rId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
                 : null;
 
@@ -399,7 +399,7 @@ public sealed class LoweringPipeline
         if (string.Equals(node.Kind, "UnaryExpression", StringComparison.OrdinalIgnoreCase))
         {
             var operandChild = node.Children.FirstOrDefault(c => string.Equals(c.Role, "operand", StringComparison.OrdinalIgnoreCase));
-            var operandId = operandChild.NodeId is int opId
+            var operandId = operandChild?.NodeId is int opId
                 ? LowerExpression(opId, nodes, typeByNode, symbols, values, valueBySymbol, usedIds, instructions, diagnostics)
                 : null;
             if (operandId is null)
@@ -555,7 +555,7 @@ public sealed class LoweringPipeline
     private static int? GetChildNodeId(SyntaxNodeInfo node, string role)
     {
         var child = node.Children.FirstOrDefault(c => string.Equals(c.Role, role, StringComparison.OrdinalIgnoreCase));
-        return child.NodeId;
+        return child?.NodeId;
     }
 
     private static bool ShouldLoad(string? symbolKind)
